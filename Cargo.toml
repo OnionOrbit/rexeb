@@ -1,0 +1,84 @@
+[package]
+name = "rexeb"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rexeb Contributors"]
+description = "A smarter, faster debtap alternative - convert .deb packages to Arch Linux packages"
+license = "MIT"
+repository = "https://github.com/rexeb/rexeb"
+keywords = ["arch", "linux", "debian", "package", "converter"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+# CLI and UI
+clap = { version = "4.4", features = ["derive", "env", "wrap_help"] }
+indicatif = { version = "0.17", features = ["rayon"] }
+console = "0.15"
+dialoguer = "0.11"
+
+# Archive handling
+ar = "0.9"
+tar = "0.4"
+flate2 = "1.0"
+xz2 = "0.1"
+zstd = "0.13"
+bzip2 = "0.4"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Async and networking
+tokio = { version = "1.35", features = ["full"] }
+reqwest = { version = "0.11", features = ["json", "gzip"] }
+
+# Fuzzy matching and search
+fuzzy-matcher = "0.3"
+strsim = "0.11"
+
+# Filesystem
+walkdir = "2.4"
+tempfile = "3.9"
+dirs = "5.0"
+
+# Parallel processing
+rayon = "1.8"
+
+# TUI (optional, enabled by feature)
+ratatui = { version = "0.25", optional = true }
+crossterm = { version = "0.27", optional = true }
+
+# Misc
+regex = "1.10"
+lazy_static = "1.4"
+chrono = "0.4"
+sha2 = "0.10"
+md5 = "0.7"
+hex = "0.4"
+
+[features]
+default = []
+tui = ["ratatui", "crossterm"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = 3
+
+[profile.dev]
+opt-level = 1
+
+[[bin]]
+name = "rexeb"
+path = "src/main.rs"
