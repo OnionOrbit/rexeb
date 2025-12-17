@@ -2,10 +2,10 @@
 name = "rexeb"
 version = "0.1.0"
 edition = "2021"
-authors = ["Rexeb Contributors"]
+authors = ["Faisal"]
 description = "A smarter, faster debtap alternative - convert .deb packages to Arch Linux packages"
 license = "MIT"
-repository = "https://github.com/rexeb/rexeb"
+repository = "https://github.com/OnionOrbit/rexeb"
 keywords = ["arch", "linux", "debian", "package", "converter"]
 categories = ["command-line-utilities", "development-tools"]
 
