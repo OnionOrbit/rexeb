@@ -40,7 +40,7 @@ Ensure you have Rust installed on your system:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Clone the repository
-git clone https://github.com/rexeb/rexeb.git
+git clone https://github.com/OnionOrbit/rexeb.git
 cd rexeb
 
 # Build and install
