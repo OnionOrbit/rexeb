@@ -103,8 +103,8 @@ This project is licensed under the GPL-v3.0 License - see the [LICENSE](LICENSE)
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/rexeb/rexeb/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/rexeb/rexeb/discussions)
+- **Issues**: [GitHub Issues](https://github.com/OnionOrbit/rexeb/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/OnionOrbit/rexeb/discussions)
 
 ---
 
