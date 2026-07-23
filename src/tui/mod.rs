@@ -1,6 +1,8 @@
 //! Terminal User Interface for rexeb
 
 use std::io;
+use std::time::Duration;
+
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -14,13 +16,27 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
     Terminal,
 };
+use tokio::sync::mpsc;
 
 use crate::error::Result;
 
+/// Events that the worker can send to the TUI
+#[derive(Debug, Clone)]
+pub enum ProgressEvent {
+    /// Set overall progress (0.0 - 1.0)
+    Progress(f64),
+    /// Set the current status message
+    Status(String),
+    /// Append a log message
+    Log(String),
+    /// Signal that work is complete
+    Done,
+    /// Signal an error
+    Error(String),
+}
+
 /// TUI application state
 pub struct App {
-    /// List of items to process
-    pub items: Vec<String>,
     /// Current progress (0.0 - 1.0)
     pub progress: f64,
     /// Current status message
@@ -33,38 +49,49 @@ impl App {
     /// Create a new app state
     pub fn new() -> Self {
         Self {
-            items: Vec::new(),
             progress: 0.0,
-            status: String::new(),
+            status: String::from("Ready"),
             logs: Vec::new(),
         }
     }
 
-    /// Add a log message
-    pub fn log(&mut self, message: impl Into<String>) {
-        self.logs.push(message.into());
-        if self.logs.len() > 100 {
-            self.logs.remove(0);
+    /// Process a single progress event
+    pub fn handle_event(&mut self, event: ProgressEvent) {
+        match event {
+            ProgressEvent::Progress(p) => self.progress = p.clamp(0.0, 1.0),
+            ProgressEvent::Status(s) => self.status = s,
+            ProgressEvent::Log(msg) => {
+                self.logs.push(msg);
+                if self.logs.len() > 100 {
+                    self.logs.remove(0);
+                }
+            }
+            ProgressEvent::Done => {
+                self.progress = 1.0;
+                self.status = "Complete".to_string();
+            }
+            ProgressEvent::Error(e) => {
+                self.logs.push(format!("ERROR: {}", e));
+                self.status = "Error".to_string();
+            }
         }
     }
 }
 
-/// Run the TUI
-pub fn run_tui<F>(mut app: App, tick_rate: std::time::Duration, mut worker: F) -> Result<()>
-where
-    F: FnMut(&mut App) -> Result<bool>, // returns true when done
-{
-    // Setup terminal
+/// Run the TUI, polling `rx` for progress events until `Done` or `Error` is received.
+pub async fn run_tui(
+    mut app: App,
+    tick_rate: Duration,
+    mut rx: mpsc::Receiver<ProgressEvent>,
+) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Run loop
-    let res = run_app(&mut terminal, &mut app, tick_rate, &mut worker);
+    let res = run_app(&mut terminal, &mut app, tick_rate, &mut rx).await;
 
-    // Restore terminal
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -80,43 +107,46 @@ where
     Ok(())
 }
 
-fn run_app<B: Backend, F>(
+async fn run_app<B: Backend>(
     terminal: &mut Terminal<B>,
     app: &mut App,
-    tick_rate: std::time::Duration,
-    worker: &mut F,
-) -> io::Result<()>
-where
-    F: FnMut(&mut App) -> Result<bool>,
-{
-    let mut last_tick = std::time::Instant::now();
+    tick_rate: Duration,
+    rx: &mut mpsc::Receiver<ProgressEvent>,
+) -> io::Result<()> {
+    let tick_interval = tokio::time::interval(tick_rate);
+    tokio::pin!(tick_interval);
+
     loop {
         terminal.draw(|f| ui(f, app))?;
 
-        let timeout = tick_rate
-            .checked_sub(last_tick.elapsed())
-            .unwrap_or_else(|| std::time::Duration::from_secs(0));
-
-        if crossterm::event::poll(timeout)? {
-            if let Event::Key(key) = event::read()? {
-                if let KeyCode::Char('q') = key.code {
-                    return Ok(());
-                }
-            }
-        }
-
-        if last_tick.elapsed() >= tick_rate {
-            match worker(app) {
-                Ok(done) => {
-                    if done {
-                        return Ok(());
+        tokio::select! {
+            // Process UI events (keyboard input)
+            _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                if crossterm::event::poll(Duration::from_millis(0))? {
+                    if let Event::Key(key) = event::read()? {
+                        if let KeyCode::Char('q') = key.code {
+                            return Ok(());
+                        }
                     }
                 }
-                Err(e) => {
-                    app.log(format!("Error: {}", e));
+            }
+            // Receive progress events from the worker
+            event = rx.recv() => {
+                match event {
+                    Some(evt) => {
+                        let is_terminal = matches!(&evt, ProgressEvent::Done | ProgressEvent::Error(_));
+                        app.handle_event(evt);
+                        if is_terminal {
+                            // Draw one final frame so the user sees the completed state
+                            terminal.draw(|f| ui(f, app))?;
+                            // Wait a moment so they can see the result before quitting
+                            tokio::time::sleep(Duration::from_secs(2)).await;
+                            return Ok(());
+                        }
+                    }
+                    None => return Ok(()), // Channel closed
                 }
             }
-            last_tick = std::time::Instant::now();
         }
     }
 }

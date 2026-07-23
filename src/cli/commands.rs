@@ -80,9 +80,21 @@ async fn convert_single_package(
     pb.set_position(40);
 
     // Resolve dependencies if not skipped
+    let resolver = crate::resolver::DependencyResolver::new()?;
     if !args.skip_deps {
-        let resolver = crate::resolver::DependencyResolver::new()?;
         resolver.resolve(&mut metadata).await?;
+    }
+
+    // Show resolution stats
+    let stats = resolver.stats(&metadata);
+    if stats.total > 0 {
+        pb.set_prefix(format!(
+            "{} [{}/{} mapped, {:.0}%]",
+            input.file_name().unwrap_or_default().to_string_lossy(),
+            stats.mapped,
+            stats.total,
+            stats.success_rate() * 100.0
+        ));
     }
 
     pb.set_position(60);
@@ -97,7 +109,15 @@ async fn convert_single_package(
         pb.finish_with_message(format!("Created {}", pkgbuild_path.display()));
     } else {
         // Build binary package
-        let converter = PackageConverter::new(metadata, parser.extract_dir())?;
+        let mut converter = PackageConverter::new(metadata, parser.extract_dir())?;
+
+        // Optionally enable sandboxed build
+        if args.sandbox {
+            let sandbox_root = tempfile::TempDir::new()?.into_path();
+            converter = converter.with_sandbox(&sandbox_root)?;
+            pb.set_message("Building in sandbox...");
+        }
+
         let output_path = converter.build(output_dir, args.format)?;
         pb.set_position(100);
         pb.finish_with_message(format!("Created {}", output_path.display()));
@@ -121,7 +141,7 @@ pub async fn execute_update(args: &super::UpdateArgs) -> Result<()> {
 
     let update_all = args.all || (!args.virtual_packages && !args.mappings && !args.aur);
 
-    let db = PackageDatabase::new()?;
+    let mut db = PackageDatabase::new()?;
 
     if update_all || args.mappings {
         pb.set_message("Updating package mappings...");
@@ -337,6 +357,7 @@ pub async fn execute_install(args: &super::InstallArgs) -> Result<()> {
         yes: args.yes,
         pseudo64: false,
         keep_temp: false,
+        sandbox: args.sandbox,
         name: None,
         version_override: None,
         release: None,

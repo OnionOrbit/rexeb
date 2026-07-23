@@ -1,10 +1,13 @@
 //! Package database for Debian to Arch package mappings
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::{RexebError, Result};
+use crate::resolver::aur::AurClient;
 
 /// Package database containing mappings and package info
 pub struct PackageDatabase {
@@ -799,29 +802,220 @@ impl PackageDatabase {
     }
 
     /// Update package mappings from online sources
-    pub async fn update_mappings(&self, _force: bool) -> Result<()> {
-        // TODO: Implement fetching from online sources
-        tracing::info!("Package mappings are up to date");
+    pub async fn update_mappings(&mut self, force: bool) -> Result<()> {
+        let config = crate::config::Config::load().unwrap_or_default();
+        let url = &config.network.mappings_url;
+
+        tracing::info!("Fetching package mappings from {}", url);
+
+        let client = reqwest::Client::builder()
+            .user_agent(format!("{}/{}", crate::NAME, crate::VERSION))
+            .timeout(std::time::Duration::from_secs(config.network.timeout))
+            .build()
+            .map_err(|e| RexebError::Network(e.to_string()))?;
+
+        let resp = client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| RexebError::Network(format!("Failed to fetch mappings: {}", e)))?;
+
+        if !resp.status().is_success() {
+            return Err(RexebError::Network(format!(
+                "Mappings server returned {}",
+                resp.status()
+            )));
+        }
+
+        let remote_mappings: HashMap<String, PackageMapping> = resp
+            .json()
+            .await
+            .map_err(|e| RexebError::Network(format!("Invalid mappings format: {}", e)))?;
+
+        let mut count = 0;
+        for (key, mapping) in remote_mappings {
+            // Only add if it doesn't exist locally, or if force is set
+            if force || !self.mappings.contains_key(&key) {
+                self.mappings.insert(key, mapping);
+                count += 1;
+            }
+        }
+
+        // Persist to disk
+        let mappings_path = self.db_dir.join("mappings.json");
+        let content = serde_json::to_string_pretty(&self.mappings)?;
+        std::fs::write(&mappings_path, content)?;
+
+        tracing::info!("Added {} new mappings ({} total)", count, self.mappings.len());
         Ok(())
     }
 
-    /// Update virtual packages database
-    pub async fn update_virtual_packages(&self, _force: bool) -> Result<()> {
-        // TODO: Implement fetching virtual packages
-        tracing::info!("Virtual packages database is up to date");
+    /// Update virtual packages database by parsing Arch sync databases
+    pub async fn update_virtual_packages(&mut self, _force: bool) -> Result<()> {
+        let sync_dir = Path::new("/var/lib/pacman/sync");
+        if !sync_dir.exists() {
+            tracing::warn!("Pacman sync DB directory not found at {}", sync_dir.display());
+            return Ok(());
+        }
+
+        let mut new_virtuals: HashMap<String, Vec<String>> = HashMap::new();
+
+        for entry in std::fs::read_dir(sync_dir).map_err(|e| {
+            RexebError::Other(format!("Cannot read pacman sync dir: {}", e))
+        })? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("db") {
+                continue;
+            }
+
+            // Sync DB files are gzipped tar archives
+            let file = std::fs::File::open(&path)?;
+            let decoder = flate2::read::GzDecoder::new(file);
+            let mut archive = tar::Archive::new(decoder);
+
+            for entry in archive.entries()? {
+                let entry = entry?;
+                let entry_path = entry.path()?;
+
+                // Each package has a directory named <pkgname>-<pkgver>/desc
+                let components: Vec<_> = entry_path.components().collect();
+                if components.len() < 2 {
+                    continue;
+                }
+
+                let file_name = components[1].as_os_str().to_string_lossy().to_string();
+
+                if file_name != "desc" {
+                    continue;
+                }
+
+                // Parse the desc file to extract package name and provides
+                let mut content = String::new();
+                let mut entry_reader = entry;
+                entry_reader.read_to_string(&mut content)?;
+
+                // Extract package name
+                let pkg_name = if let Some(start) = content.find("%NAME%") {
+                    let rest = &content[start + 6..];
+                    rest.lines().next().unwrap_or("").trim().to_string()
+                } else {
+                    continue;
+                };
+
+                // Extract Provides field
+                if let Some(start) = content.find("%PROVIDES%") {
+                    let rest = &content[start + 10..];
+                    let provides: Vec<String> = rest
+                        .lines()
+                        .take_while(|l| !l.starts_with('%'))
+                        .map(|l| l.trim().to_string())
+                        .filter(|l| !l.is_empty())
+                        .collect();
+
+                    for provide in provides {
+                        if provide != pkg_name {
+                            new_virtuals
+                                .entry(provide)
+                                .or_default()
+                                .push(pkg_name.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Merge with existing virtuals
+        for (virtual_name, providers) in new_virtuals {
+            self.virtual_packages
+                .entry(virtual_name)
+                .or_default()
+                .extend(providers);
+        }
+
+        tracing::info!(
+            "Updated virtual packages database ({} entries)",
+            self.virtual_packages.len()
+        );
         Ok(())
     }
 
-    /// Update AUR cache
-    pub async fn update_aur_cache(&self, _force: bool) -> Result<()> {
-        // TODO: Implement AUR cache update
-        tracing::info!("AUR cache is up to date");
+    /// Update AUR cache from the remote package list
+    pub async fn update_aur_cache(&mut self, _force: bool) -> Result<()> {
+        let config = crate::config::Config::load().unwrap_or_default();
+        let url = &config.network.aur_cache_url;
+
+        tracing::info!("Fetching AUR package list from {}", url);
+
+        let client = reqwest::Client::builder()
+            .user_agent(format!("{}/{}", crate::NAME, crate::VERSION))
+            .timeout(std::time::Duration::from_secs(config.network.timeout))
+            .build()
+            .map_err(|e| RexebError::Network(e.to_string()))?;
+
+        let resp = client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| RexebError::Network(format!("Failed to fetch AUR list: {}", e)))?;
+
+        if !resp.status().is_success() {
+            return Err(RexebError::Network(format!(
+                "AUR package list returned {}",
+                resp.status()
+            )));
+        }
+
+        // packages.gz format: one package per line, fields separated by whitespace
+        // Format: name version description...
+        let bytes = resp.bytes().await?;
+        let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
+        let mut raw = String::new();
+        decoder.read_to_string(&mut raw)?;
+
+        let mut count = 0;
+        for line in raw.lines().take(50_000) {
+            let parts: Vec<&str> = line.splitn(3, char::is_whitespace).collect();
+            if parts.len() < 2 {
+                continue;
+            }
+
+            let name = parts[0].trim().to_string();
+            let version = parts[1].trim().to_string();
+            let description = parts.get(2).map(|s| s.trim().to_string()).unwrap_or_default();
+
+            if name.is_empty() || version.is_empty() {
+                continue;
+            }
+
+            self.aur_packages.insert(
+                name.clone(),
+                AurPackageInfo {
+                    name,
+                    version,
+                    description,
+                    votes: 0,
+                    popularity: 0.0,
+                    out_of_date: None,
+                },
+            );
+            count += 1;
+        }
+
+        // Save to disk
+        let aur_path = self.db_dir.join("aur_packages.json");
+        let content = serde_json::to_string_pretty(&self.aur_packages)?;
+        std::fs::write(&aur_path, content)?;
+
+        tracing::info!("Cached {} AUR packages", count);
         Ok(())
     }
 
     /// Search for Arch packages
     pub async fn search_arch(&self, query: &str, _fuzzy: bool, limit: usize) -> Result<Vec<SearchResult>> {
         let query_lower = query.to_lowercase();
+
+        // Try local cache first
         let mut results: Vec<SearchResult> = self.arch_packages
             .iter()
             .filter(|(name, info)| {
@@ -837,14 +1031,41 @@ impl PackageDatabase {
             })
             .collect();
 
+        // Fall back to pacman -Ss if cache empty or no matches
+        if results.is_empty() {
+            if let Ok(output) = std::process::Command::new("pacman")
+                .arg("-Ss")
+                .arg(query)
+                .output()
+            {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    for line in stdout.lines().take(limit) {
+                        // pacman -Ss format: "core/pkgname pkgver\n    description"
+                        if let Some(rest) = line.strip_suffix('/') {
+                            if let Some((pkg, ver)) = rest.split_once(' ') {
+                                results.push(SearchResult {
+                                    name: pkg.to_string(),
+                                    description: String::new(),
+                                    version: ver.to_string(),
+                                    score: 0.9,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         Ok(results)
     }
 
     /// Search for AUR packages
     pub async fn search_aur(&self, query: &str, _fuzzy: bool, limit: usize) -> Result<Vec<SearchResult>> {
-        // For now, search local cache
         let query_lower = query.to_lowercase();
+
+        // Try local cache first
         let mut results: Vec<SearchResult> = self.aur_packages
             .iter()
             .filter(|(name, info)| {
@@ -859,6 +1080,21 @@ impl PackageDatabase {
                 score: if name.to_lowercase() == query_lower { 1.0 } else { 0.8 },
             })
             .collect();
+
+        // Fall back to live AUR search if cache empty or no matches
+        if results.is_empty() {
+            let aur = AurClient::new();
+            if let Ok(pkgs) = aur.search(query).await {
+                for pkg in pkgs.iter().take(limit) {
+                    results.push(SearchResult {
+                        name: pkg.name.clone(),
+                        description: pkg.description.clone().unwrap_or_default(),
+                        version: pkg.version.clone(),
+                        score: if pkg.name.to_lowercase() == query_lower { 1.0 } else { 0.9 },
+                    });
+                }
+            }
+        }
 
         results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         Ok(results)

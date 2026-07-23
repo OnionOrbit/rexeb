@@ -70,6 +70,10 @@ pub struct NetworkConfig {
     pub proxy: Option<String>,
     /// AUR RPC URL
     pub aur_url: String,
+    /// URL for remote package mappings database
+    pub mappings_url: String,
+    /// URL for AUR package metadata snapshot
+    pub aur_cache_url: String,
     /// Enable offline mode
     pub offline: bool,
 }
@@ -127,6 +131,8 @@ impl Default for NetworkConfig {
             timeout: 30,
             proxy: None,
             aur_url: "https://aur.archlinux.org/rpc".to_string(),
+            mappings_url: "https://raw.githubusercontent.com/OnionOrbit/rexeb/main/db/mappings.json".to_string(),
+            aur_cache_url: "https://aur.archlinux.org/packages.gz".to_string(),
             offline: false,
         }
     }
@@ -233,11 +239,14 @@ impl Config {
             "conversion.skip_deps" => Some(self.conversion.skip_deps.to_string()),
             "conversion.generate_pkgbuild" => Some(self.conversion.generate_pkgbuild.to_string()),
             "conversion.keep_temp" => Some(self.conversion.keep_temp.to_string()),
+            "conversion.strip_binaries" => Some(self.conversion.strip_binaries.to_string()),
             "conversion.min_match_confidence" => Some(self.conversion.min_match_confidence.to_string()),
             
             "network.timeout" => Some(self.network.timeout.to_string()),
             "network.proxy" => self.network.proxy.clone(),
             "network.aur_url" => Some(self.network.aur_url.clone()),
+            "network.mappings_url" => Some(self.network.mappings_url.clone()),
+            "network.aur_cache_url" => Some(self.network.aur_cache_url.clone()),
             "network.offline" => Some(self.network.offline.to_string()),
             
             "logging.level" => Some(self.logging.level.clone()),
@@ -288,6 +297,16 @@ impl Config {
                     RexebError::Config("Invalid boolean for generate_pkgbuild".into())
                 })?;
             }
+            "conversion.keep_temp" => {
+                self.conversion.keep_temp = value.parse().map_err(|_| {
+                    RexebError::Config("Invalid boolean for keep_temp".into())
+                })?;
+            }
+            "conversion.strip_binaries" => {
+                self.conversion.strip_binaries = value.parse().map_err(|_| {
+                    RexebError::Config("Invalid boolean for strip_binaries".into())
+                })?;
+            }
             "conversion.min_match_confidence" => {
                 self.conversion.min_match_confidence = value.parse().map_err(|_| {
                     RexebError::Config("Invalid number for min_match_confidence".into())
@@ -304,6 +323,12 @@ impl Config {
             }
             "network.aur_url" => {
                 self.network.aur_url = value.to_string();
+            }
+            "network.mappings_url" => {
+                self.network.mappings_url = value.to_string();
+            }
+            "network.aur_cache_url" => {
+                self.network.aur_cache_url = value.to_string();
             }
             "network.offline" => {
                 self.network.offline = value.parse().map_err(|_| {

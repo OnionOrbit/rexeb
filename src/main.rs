@@ -85,16 +85,33 @@ async fn run(cli: Cli) -> Result<()> {
     // Handle TUI mode
     #[cfg(feature = "tui")]
     if cli.tui {
-        use rexeb::tui::{App, run_tui};
+        use rexeb::tui::{App, ProgressEvent, run_tui};
+        use tokio::sync::mpsc;
+
         let app = App::new();
         let tick_rate = std::time::Duration::from_millis(250);
-        
-        // This is a placeholder. Real TUI integration needs proper wiring
-        // with the worker threads.
-        run_tui(app, tick_rate, |_app| {
-            // Worker logic would go here
-            Ok(false)
-        })?;
+        let (tx, rx) = mpsc::channel::<ProgressEvent>(64);
+
+        // Spawn the convert task with progress reporting
+        let tx_clone = tx.clone();
+        tokio::spawn(async move {
+            // For now, demonstrate TUI with a simple test workflow.
+            // A full integration would parse the CLI args and run the convert flow here.
+            let _ = tx_clone.send(ProgressEvent::Status("Starting conversion...".into())).await;
+            let _ = tx_clone.send(ProgressEvent::Log("rexeb TUI mode active".into())).await;
+            let _ = tx_clone.send(ProgressEvent::Log("Use this mode for real-time conversion monitoring".into())).await;
+            
+            for i in 0..=10 {
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                let pct = i as f64 / 10.0;
+                let _ = tx_clone.send(ProgressEvent::Progress(pct)).await;
+                let _ = tx_clone.send(ProgressEvent::Log(format!("Step {}/10 complete", i))).await;
+            }
+            
+            let _ = tx_clone.send(ProgressEvent::Done).await;
+        });
+
+        run_tui(app, tick_rate, rx).await?;
         return Ok(());
     }
 

@@ -20,6 +20,7 @@ use crate::models::{
     Architecture, Dependency, DependencyType, License, MaintainerScript, PackageFormat,
     PackageMetadata,
 };
+use crate::parsers::Parser;
 
 /// Parser for Debian .deb packages
 pub struct DebParser {
@@ -357,6 +358,24 @@ impl DebParser {
         }
 
         Ok(())
+    }
+}
+
+impl Parser for DebParser {
+    fn new(path: &Path) -> Result<Self> {
+        DebParser::new(path)
+    }
+
+    fn parse(&self) -> Result<PackageMetadata> {
+        self.parse()
+    }
+
+    fn extract_dir(&self) -> &Path {
+        self.extract_dir()
+    }
+
+    fn format(&self) -> PackageFormat {
+        PackageFormat::Deb
     }
 }
 

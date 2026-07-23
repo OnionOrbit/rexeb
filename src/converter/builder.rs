@@ -3,14 +3,16 @@
 //! Creates .pkg.tar.zst packages from extracted files and metadata
 
 use std::fs::{self, File};
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
+use sha2::{Digest, Sha256};
 use tar::Builder as TarBuilder;
 
 use crate::cli::OutputFormat;
 use crate::error::{RexebError, Result};
 use crate::models::PackageMetadata;
+use crate::sandbox::{NspawnSandbox, Sandbox};
 
 use super::InstallScriptGenerator;
 
@@ -20,6 +22,8 @@ pub struct PackageConverter {
     metadata: PackageMetadata,
     /// Path to extracted data files
     data_dir: PathBuf,
+    /// Optional sandbox for isolated builds
+    sandbox: Option<NspawnSandbox>,
 }
 
 impl PackageConverter {
@@ -31,7 +35,19 @@ impl PackageConverter {
             return Err(RexebError::file_not_found(&data_dir));
         }
 
-        Ok(Self { metadata, data_dir })
+        Ok(Self {
+            metadata,
+            data_dir,
+            sandbox: None,
+        })
+    }
+
+    /// Enable sandboxed builds using systemd-nspawn
+    pub fn with_sandbox(mut self, sandbox_root: &Path) -> Result<Self> {
+        let mut sandbox = NspawnSandbox::new(sandbox_root)?;
+        sandbox.init()?;
+        self.sandbox = Some(sandbox);
+        Ok(self)
     }
 
     /// Build the Arch Linux package
@@ -101,7 +117,7 @@ impl PackageConverter {
         lines.push("builddir = /tmp/rexeb".to_string());
         lines.push("startdir = /tmp/rexeb".to_string());
         lines.push("buildtool = rexeb".to_string());
-        lines.push("buildtoolver = 0.1.0".to_string());
+        lines.push(format!("buildtoolver = {}", crate::VERSION));
         lines.push("buildenv = !distcc".to_string());
         lines.push("buildenv = !ccache".to_string());
         lines.push("buildenv = !check".to_string());
@@ -136,19 +152,15 @@ impl PackageConverter {
         for filename in special_files {
             let path = pkg_root.join(filename);
             if path.exists() {
-                if let Ok(metadata) = path.metadata() {
-                    let size = metadata.len();
-                    // Generate a simple SHA256 for the file
-                    if let Ok(content) = std::fs::read(&path) {
-                        use sha2::{Sha256, Digest};
-                        let hash = Sha256::new().chain_update(&content).finalize();
-                        let hash_hex = hex::encode(hash);
-                        mtree_content.push_str(&format!(
-                            "./{} time=0 size={} sha256digest={}\n",
-                            filename, size, hash_hex
-                        ));
+                    if let Ok(meta) = path.metadata() {
+                        let size = meta.len();
+                        if let Ok(hash_hex) = file_sha256(&path) {
+                            mtree_content.push_str(&format!(
+                                "./{} time=0 size={} sha256digest={}\n",
+                                filename, size, hash_hex
+                            ));
+                        }
                     }
-                }
             }
         }
 
@@ -200,11 +212,7 @@ impl PackageConverter {
                     ));
                 } else if metadata.is_file() {
                     let size = metadata.len();
-                    // Generate SHA256 for regular files
-                    if let Ok(content) = std::fs::read(entry.path()) {
-                        use sha2::{Sha256, Digest};
-                        let hash = Sha256::new().chain_update(&content).finalize();
-                        let hash_hex = hex::encode(hash);
+                    if let Ok(hash_hex) = file_sha256(entry.path()) {
                         mtree_content.push_str(&format!(
                             "./{} time=0 size={} mode={:o} type={} sha256digest={}\n",
                             path_str, size, mode, file_type, hash_hex
@@ -245,6 +253,47 @@ impl PackageConverter {
 
     /// Copy data files to package root
     fn copy_data_files(&self, pkg_root: &Path) -> Result<()> {
+        // When sandbox is enabled, copy data through the sandbox for isolation
+        if let Some(ref sandbox) = self.sandbox {
+            let sandbox_data = Path::new("/rexeb-data");
+            sandbox.copy_in(&self.data_dir, sandbox_data)?;
+
+            // Now copy from sandbox to package root
+            for entry in walkdir::WalkDir::new(&self.data_dir) {
+                let entry = entry?;
+                let source = entry.path();
+                
+                if let Ok(rel_path) = source.strip_prefix(&self.data_dir) {
+                    if rel_path.as_os_str().is_empty() {
+                        continue;
+                    }
+
+                    let dest = pkg_root.join(rel_path);
+                    
+                    if entry.file_type().is_dir() {
+                        fs::create_dir_all(&dest)?;
+                    } else if entry.file_type().is_file() {
+                        if let Some(parent) = dest.parent() {
+                            fs::create_dir_all(parent)?;
+                        }
+                        fs::copy(source, &dest)?;
+                    } else if entry.file_type().is_symlink() {
+                        #[cfg(unix)]
+                        {
+                            let target = fs::read_link(source)?;
+                            if dest.exists() || dest.symlink_metadata().is_ok() {
+                                fs::remove_file(&dest)?;
+                            }
+                            std::os::unix::fs::symlink(target, &dest)?;
+                        }
+                    }
+                }
+            }
+
+            return Ok(());
+        }
+
+        // Direct copy (no sandbox)
         for entry in walkdir::WalkDir::new(&self.data_dir) {
             let entry = entry?;
             let source = entry.path();
@@ -451,6 +500,21 @@ impl PackageConverter {
         
         Ok(())
     }
+}
+
+/// Compute SHA256 digest of a file using streaming reads (memory-efficient)
+fn file_sha256(path: &Path) -> Result<String> {
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 65536];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hex::encode(hasher.finalize()))
 }
 
 #[cfg(test)]

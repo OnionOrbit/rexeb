@@ -10,6 +10,8 @@ pub use database::PackageDatabase;
 pub use fuzzy::FuzzyMatcher;
 pub use mapper::PackageMapper;
 
+use std::sync::Mutex;
+
 use crate::error::Result;
 use crate::models::{Dependency, DependencyType, PackageMetadata};
 
@@ -21,6 +23,8 @@ pub struct DependencyResolver {
     fuzzy: FuzzyMatcher,
     /// AUR client for online lookups
     aur: AurClient,
+    /// Package mapper for regex-based name transformations
+    mapper: Mutex<PackageMapper>,
 }
 
 impl DependencyResolver {
@@ -30,6 +34,7 @@ impl DependencyResolver {
             db: PackageDatabase::new()?,
             fuzzy: FuzzyMatcher::new(),
             aur: AurClient::new(),
+            mapper: Mutex::new(PackageMapper::new()),
         })
     }
 
@@ -78,13 +83,19 @@ impl DependencyResolver {
             return Ok(());
         }
 
-        // 2. Try fuzzy matching against local DB
+        // 2. Try rule-based mapping via PackageMapper (regex transformations)
+        if let Some((arch_name, confidence)) = self.mapper.lock().unwrap().apply_rules(&dep.debian_name) {
+            dep.set_arch_name(arch_name, confidence);
+            return Ok(());
+        }
+
+        // 3. Try fuzzy matching against local DB
         if let Some((arch_name, confidence)) = self.fuzzy.find_best_match(&dep.debian_name, &self.db)? {
             dep.set_arch_name(arch_name, confidence);
             return Ok(());
         }
 
-        // 3. Try AUR search
+        // 4. Try AUR search
         // First try exact name match in AUR
         if let Ok(results) = self.aur.info(&[&dep.debian_name]).await {
             if let Some(pkg) = results.first() {
@@ -93,7 +104,7 @@ impl DependencyResolver {
             }
         }
 
-        // 4. Try AUR provider search (for virtual packages or libraries)
+        // 5. Try AUR provider search (for virtual packages or libraries)
         if let Ok(providers) = self.aur.find_providers(&dep.debian_name).await {
             if let Some(pkg) = providers.first() {
                 // If we found a provider, use it but with lower confidence
@@ -104,7 +115,7 @@ impl DependencyResolver {
             }
         }
 
-        // 5. Check if it's a known virtual package in local DB
+        // 6. Check if it's a known virtual package in local DB
         if self.db.is_virtual(&dep.debian_name)? {
             dep.is_virtual = true;
         }

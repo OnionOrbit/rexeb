@@ -86,11 +86,11 @@ pub async fn convert(
 ) -> Result<std::path::PathBuf> {
     use cli::OutputFormat;
     use converter::PackageConverter;
-    use parsers::deb::DebParser;
+    use parsers::{Parser, detect_and_create};
     use resolver::DependencyResolver;
 
-    // Parse the package
-    let parser = DebParser::new(input)?;
+    // Parse the package (auto-detect format)
+    let parser = detect_and_create(input)?;
     let mut metadata = parser.parse()?;
 
     // Normalize version
@@ -115,9 +115,9 @@ pub async fn convert(
 ///
 /// Analysis report on success
 pub fn analyze(input: &std::path::Path) -> Result<analyzer::AnalysisReport> {
-    use parsers::deb::DebParser;
+    use parsers::{Parser, detect_and_create};
 
-    let parser = DebParser::new(input)?;
+    let parser = detect_and_create(input)?;
     let metadata = parser.parse()?;
 
     let analyzer = analyzer::PackageAnalyzer::new(&metadata, parser.extract_dir())?;
@@ -134,9 +134,9 @@ pub fn analyze(input: &std::path::Path) -> Result<analyzer::AnalysisReport> {
 ///
 /// Package metadata on success
 pub fn info(input: &std::path::Path) -> Result<PackageMetadata> {
-    use parsers::deb::DebParser;
+    use parsers::{Parser, detect_and_create};
 
-    let parser = DebParser::new(input)?;
+    let parser = detect_and_create(input)?;
     parser.parse()
 }
 

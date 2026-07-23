@@ -104,6 +104,10 @@ pub struct ConvertArgs {
     #[arg(long)]
     pub keep_temp: bool,
 
+    /// Build inside a systemd-nspawn sandbox
+    #[arg(long)]
+    pub sandbox: bool,
+
     /// Custom package name override
     #[arg(long)]
     pub name: Option<String>,
@@ -256,6 +260,10 @@ pub struct InstallArgs {
     /// Install as explicit
     #[arg(long)]
     pub asexplicit: bool,
+
+    /// Build inside a systemd-nspawn sandbox
+    #[arg(long)]
+    pub sandbox: bool,
 
     /// Pass additional flags to pacman
     #[arg(last = true)]
