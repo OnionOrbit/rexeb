@@ -70,7 +70,7 @@ rexeb convert package1.deb package2.deb package3.deb
 |---------|-------------|
 | `convert` | Convert .deb packages to Arch Linux packages |
 | `install` | Convert and install packages in one step |
-| `update` | Update Arch Linux package databases |
+| `update` | Update Arch Linux package databases (Upcoming) |
 | `analyze` | Analyze .deb package contents and dependencies |
 | `info` | Display detailed package information |
 | `config` | Manage rexeb configuration |
