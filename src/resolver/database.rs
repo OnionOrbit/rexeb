@@ -54,30 +54,45 @@ pub enum MappingSource {
 /// Info about an Arch repository package
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchPackageInfo {
+    /// Package name
     pub name: String,
+    /// Package version
     pub version: String,
+    /// Short package description
     pub description: String,
+    /// Virtual packages or features provided by this package
     pub provides: Vec<String>,
+    /// Packages replaced by this package
     pub replaces: Vec<String>,
 }
 
 /// Info about an AUR package
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AurPackageInfo {
+    /// Package name
     pub name: String,
+    /// Package version string
     pub version: String,
+    /// Short package description
     pub description: String,
+    /// Number of votes on AUR
     pub votes: u32,
+    /// Popularity score as reported by AUR
     pub popularity: f64,
+    /// Unix timestamp when flagged out-of-date, if any
     pub out_of_date: Option<i64>,
 }
 
 /// Search result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
+    /// Package name
     pub name: String,
+    /// Package description
     pub description: String,
+    /// Package version string
     pub version: String,
+    /// Relevance or match score (0.0 - 1.0, higher is better)
     pub score: f32,
 }
 
@@ -113,8 +128,87 @@ impl PackageDatabase {
         Ok(dir)
     }
 
+    /// Try loading mappings from bundled JSON files (compile-time fallback)
+    fn load_bundled_mappings(&mut self) -> bool {
+        // First try runtime data_dir (installed)
+        if let Ok(data_dir) = Self::get_db_dir() {
+            let bundled = data_dir.join("mappings.json");
+            // Also check relative db/ path for dev builds
+            let candidates = [
+                bundled,
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("db/mappings.json"),
+            ];
+            for path in &candidates {
+                if path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(path) {
+                        if let Ok(wrapped) = serde_json::from_str::<serde_json::Value>(&content) {
+                            if let Some(inner) = wrapped.get("mappings") {
+                                if let Ok(m) = serde_json::from_value::<HashMap<String, PackageMapping>>(inner.clone()) {
+                                    let count = m.len();
+                                    self.mappings.extend(m);
+                                    tracing::debug!("Loaded {} mappings from {}", count, path.display());
+                                    // Also try virtual packages
+                                    self.load_bundled_virtuals();
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Fallback to compile-time include
+        if let Ok(m) = Self::load_embedded_mappings() {
+            let count = m.len();
+            self.mappings.extend(m);
+            tracing::debug!("Loaded {} embedded mappings", count);
+            return true;
+        }
+        false
+    }
+
+    /// Load embedded mappings compiled into the binary
+    fn load_embedded_mappings() -> Result<HashMap<String, PackageMapping>> {
+        let content = include_str!("../../db/mappings.json");
+        let wrapped: serde_json::Value = serde_json::from_str(content)?;
+        if let Some(inner) = wrapped.get("mappings") {
+            Ok(serde_json::from_value(inner.clone())?)
+        } else {
+            Ok(serde_json::from_str(content)?)
+        }
+    }
+
+    /// Load bundled virtual packages
+    fn load_bundled_virtuals(&mut self) {
+        let candidates = [
+            Self::get_db_dir().ok().map(|d| d.join("virtual_packages.json")),
+            Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("db/virtual_packages.json")),
+        ];
+        for path in candidates.into_iter().flatten() {
+            if path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(wrapped) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(vp) = wrapped.get("virtual_packages") {
+                            if let Ok(m) = serde_json::from_value::<HashMap<String, Vec<String>>>(vp.clone()) {
+                                for (k, v) in m {
+                                    self.virtual_packages.entry(k).or_default().extend(v);
+                                }
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Load built-in package mappings
     fn load_builtin_mappings(&mut self) {
+        // Try JSON first; if successful, skip hardcoded fallback
+        if self.load_bundled_mappings() {
+            return;
+        }
+        // Fallback: hardcoded mappings when JSON not available
         // Common Debian -> Arch mappings
         let mappings = [
             // ==================== JAVA (CRITICAL) ====================
@@ -731,26 +825,42 @@ impl PackageDatabase {
 
     /// Load cached database files
     fn load_cached_data(&mut self) -> Result<()> {
-        // Load custom mappings
+        // Load custom mappings - handle both new wrapped format and legacy flat format
         let mappings_path = self.db_dir.join("mappings.json");
         if mappings_path.exists() {
-            let content = std::fs::read_to_string(&mappings_path)?;
-            let custom_mappings: HashMap<String, PackageMapping> = serde_json::from_str(&content)?;
-            self.mappings.extend(custom_mappings);
+            if let Ok(content) = std::fs::read_to_string(&mappings_path) {
+                // Try wrapped format first: {"mappings": {...}}
+                if let Ok(wrapped) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(inner) = wrapped.get("mappings") {
+                        if let Ok(m) = serde_json::from_value::<HashMap<String, PackageMapping>>(inner.clone()) {
+                            self.mappings.extend(m);
+                        }
+                    } else if let Ok(flat) = serde_json::from_str::<HashMap<String, PackageMapping>>(&content) {
+                        // Legacy flat format
+                        self.mappings.extend(flat);
+                    }
+                }
+            }
         }
 
         // Load Arch package cache
         let arch_path = self.db_dir.join("arch_packages.json");
         if arch_path.exists() {
-            let content = std::fs::read_to_string(&arch_path)?;
-            self.arch_packages = serde_json::from_str(&content)?;
+            if let Ok(content) = std::fs::read_to_string(&arch_path) {
+                if let Ok(data) = serde_json::from_str(&content) {
+                    self.arch_packages = data;
+                }
+            }
         }
 
         // Load AUR cache
         let aur_path = self.db_dir.join("aur_packages.json");
         if aur_path.exists() {
-            let content = std::fs::read_to_string(&aur_path)?;
-            self.aur_packages = serde_json::from_str(&content)?;
+            if let Ok(content) = std::fs::read_to_string(&aur_path) {
+                if let Ok(data) = serde_json::from_str(&content) {
+                    self.aur_packages = data;
+                }
+            }
         }
 
         Ok(())
@@ -804,6 +914,12 @@ impl PackageDatabase {
     /// Update package mappings from online sources
     pub async fn update_mappings(&mut self, force: bool) -> Result<()> {
         let config = crate::config::Config::load().unwrap_or_default();
+
+        if config.network.offline {
+            tracing::warn!("Offline mode enabled — skipping remote mappings update");
+            return Ok(());
+        }
+
         let url = &config.network.mappings_url;
 
         tracing::info!("Fetching package mappings from {}", url);
@@ -814,36 +930,53 @@ impl PackageDatabase {
             .build()
             .map_err(|e| RexebError::Network(e.to_string()))?;
 
-        let resp = client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| RexebError::Network(format!("Failed to fetch mappings: {}", e)))?;
+        let resp = match client.get(url).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!("Failed to fetch mappings: {} — using local database ({} mappings)", e, self.mappings.len());
+                return Ok(());
+            }
+        };
 
         if !resp.status().is_success() {
-            return Err(RexebError::Network(format!(
-                "Mappings server returned {}",
-                resp.status()
-            )));
+            tracing::warn!(
+                "Mappings server returned {} — using local database ({} mappings). Check that db/mappings.json exists at the configured URL.",
+                resp.status(),
+                self.mappings.len()
+            );
+            return Ok(());
         }
 
-        let remote_mappings: HashMap<String, PackageMapping> = resp
+        // Support both wrapped {"mappings": {...}} and flat {...} formats
+        let raw: serde_json::Value = resp
             .json()
             .await
             .map_err(|e| RexebError::Network(format!("Invalid mappings format: {}", e)))?;
 
+        let remote_mappings: HashMap<String, PackageMapping> = if let Some(inner) = raw.get("mappings") {
+            serde_json::from_value(inner.clone())
+                .map_err(|e| RexebError::Network(format!("Invalid mappings format: {}", e)))?
+        } else {
+            serde_json::from_value(raw)
+                .map_err(|e| RexebError::Network(format!("Invalid mappings format: {}", e)))?
+        };
+
         let mut count = 0;
         for (key, mapping) in remote_mappings {
-            // Only add if it doesn't exist locally, or if force is set
             if force || !self.mappings.contains_key(&key) {
                 self.mappings.insert(key, mapping);
                 count += 1;
             }
         }
 
-        // Persist to disk
+        // Persist to disk (wrapped format for consistency with db/mappings.json)
         let mappings_path = self.db_dir.join("mappings.json");
-        let content = serde_json::to_string_pretty(&self.mappings)?;
+        let wrapped = serde_json::json!({
+            "version": 1,
+            "count": self.mappings.len(),
+            "mappings": &self.mappings
+        });
+        let content = serde_json::to_string_pretty(&wrapped)?;
         std::fs::write(&mappings_path, content)?;
 
         tracing::info!("Added {} new mappings ({} total)", count, self.mappings.len());

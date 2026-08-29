@@ -40,6 +40,7 @@ pub mod models;
 pub mod parsers;
 pub mod resolver;
 pub mod sandbox;
+pub mod watermark;
 #[cfg(feature = "tui")]
 pub mod tui;
 
@@ -86,7 +87,7 @@ pub async fn convert(
 ) -> Result<std::path::PathBuf> {
     use cli::OutputFormat;
     use converter::PackageConverter;
-    use parsers::{Parser, detect_and_create};
+    use parsers::detect_and_create;
     use resolver::DependencyResolver;
 
     // Parse the package (auto-detect format)
@@ -115,7 +116,7 @@ pub async fn convert(
 ///
 /// Analysis report on success
 pub fn analyze(input: &std::path::Path) -> Result<analyzer::AnalysisReport> {
-    use parsers::{Parser, detect_and_create};
+    use parsers::detect_and_create;
 
     let parser = detect_and_create(input)?;
     let metadata = parser.parse()?;
@@ -134,7 +135,7 @@ pub fn analyze(input: &std::path::Path) -> Result<analyzer::AnalysisReport> {
 ///
 /// Package metadata on success
 pub fn info(input: &std::path::Path) -> Result<PackageMetadata> {
-    use parsers::{Parser, detect_and_create};
+    use parsers::detect_and_create;
 
     let parser = detect_and_create(input)?;
     parser.parse()

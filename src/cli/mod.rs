@@ -67,6 +67,24 @@ pub enum Commands {
 
     /// Clean cache and temporary files
     Clean(CleanArgs),
+
+    /// Manage dependency mappings manually
+    Map(MapArgs),
+
+    /// Check if a package or converted package is available on AUR
+    CheckAur(CheckAurArgs),
+
+    /// Push a converted package to the AUR
+    AurPush(AurPushArgs),
+
+    /// List packages installed by rexeb (via watermark)
+    ListInstalled(ListInstalledArgs),
+
+    /// Manage installed rexeb packages (rename, fix icons)
+    Manage(ManageArgs),
+
+    /// Check for rexeb updates on GitHub
+    SelfUpdate(SelfUpdateArgs),
 }
 
 /// Arguments for the convert command
@@ -169,6 +187,10 @@ pub struct UpdateArgs {
     /// Force update even if recently updated
     #[arg(short, long)]
     pub force: bool,
+
+    /// Enlarge mappings by crawling local repo DBs and debtap mappings
+    #[arg(long)]
+    pub enlarge: bool,
 }
 
 /// Arguments for the info command
@@ -325,6 +347,108 @@ pub struct CleanArgs {
     /// Dry run - show what would be deleted
     #[arg(short, long)]
     pub dry_run: bool,
+}
+
+/// Arguments for the map command (manual dependency mapping)
+#[derive(Parser, Debug)]
+pub struct MapArgs {
+    /// Map subcommand
+    #[command(subcommand)]
+    pub command: MapCommands,
+}
+
+/// Map subcommands
+#[derive(Subcommand, Debug)]
+pub enum MapCommands {
+    /// Add a manual mapping
+    Add {
+        /// Debian package name
+        debian: String,
+        /// Arch package name
+        arch: String,
+        /// Confidence (0.0 - 1.0)
+        #[arg(long, default_value = "1.0")]
+        confidence: f32,
+    },
+    /// Remove a mapping
+    Remove {
+        /// Debian package name
+        debian: String,
+    },
+    /// List all mappings
+    List {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Import mappings from a JSON file
+    Import {
+        /// Path to JSON file
+        file: PathBuf,
+    },
+    /// Export mappings to a JSON file
+    Export {
+        /// Output path
+        file: PathBuf,
+    },
+}
+
+/// Arguments for the check-aur command
+#[derive(Parser, Debug)]
+pub struct CheckAurArgs {
+    /// Package file (.deb) or package name to check
+    pub package: Option<String>,
+    /// Check all rexeb-installed packages
+    #[arg(long)]
+    pub installed: bool,
+}
+
+/// Arguments for the aur-push command
+#[derive(Parser, Debug)]
+pub struct AurPushArgs {
+    /// Converted package directory (containing PKGBUILD) or .deb file
+    pub input: PathBuf,
+    /// AUR package base name (defaults to PKGBUILD pkgname)
+    #[arg(long)]
+    pub pkgbase: Option<String>,
+    /// Show what would be done without pushing
+    #[arg(long)]
+    pub dry_run: bool,
+    /// Force push even if package exists on AUR
+    #[arg(long)]
+    pub force: bool,
+}
+
+/// Arguments for list-installed command
+#[derive(Parser, Debug)]
+pub struct ListInstalledArgs {
+    /// Output as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Arguments for the manage command
+#[derive(Parser, Debug)]
+pub struct ManageArgs {
+    /// Package name to manage
+    pub package: String,
+    /// Rename package to new name
+    #[arg(long)]
+    pub rename: Option<String>,
+    /// Fix icon references for this package
+    #[arg(long)]
+    pub fix_icon: bool,
+}
+
+/// Arguments for self-update command
+#[derive(Parser, Debug)]
+pub struct SelfUpdateArgs {
+    /// Only check, don't download
+    #[arg(long)]
+    pub check_only: bool,
+    /// Force apply even if not needed
+    #[arg(long)]
+    pub force: bool,
 }
 
 impl Cli {

@@ -74,13 +74,27 @@ async fn run(cli: Cli) -> Result<()> {
         }
     }
 
-    // Set number of parallel jobs
-    if let Some(jobs) = cli.jobs {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(jobs)
-            .build_global()
-            .ok();
-    }
+    // Set number of parallel jobs with low-RAM / low-core safety caps
+    let effective_jobs = cli.jobs.unwrap_or_else(|| {
+        // Check available memory: if < 1GB, cap to 1-2 jobs to avoid OOM on 2GB devices
+        let mem_mb = read_mem_available_mb().unwrap_or(4096);
+        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
+        if mem_mb < 1024 {
+            tracing::warn!("Low memory detected ({} MB) — capping parallel jobs", mem_mb);
+            1
+        } else if cores <= 2 {
+            // Dual-core / i3-like: don't saturate both cores
+            2.min(cores)
+        } else {
+            // Cap to half cores on low-end, leave headroom for the system
+            (cores / 2).max(2).min(4)
+        }
+    });
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(effective_jobs)
+        .build_global()
+        .ok();
+    tracing::debug!("Using {} parallel jobs", effective_jobs);
 
     // Handle TUI mode
     #[cfg(feature = "tui")]
@@ -141,7 +155,52 @@ async fn run(cli: Cli) -> Result<()> {
         Commands::Clean(args) => {
             cli::execute_clean(&args).await
         }
+        Commands::Map(args) => {
+            cli::execute_map(&args).await
+        }
+        Commands::CheckAur(args) => {
+            cli::execute_check_aur(&args).await
+        }
+        Commands::AurPush(args) => {
+            cli::execute_aur_push(&args).await
+        }
+        Commands::ListInstalled(args) => {
+            cli::execute_list_installed(&args).await
+        }
+        Commands::Manage(args) => {
+            cli::execute_manage(&args).await
+        }
+        Commands::SelfUpdate(args) => {
+            cli::execute_self_update(&args).await
+        }
     }
+}
+
+/// Read available memory in MB from /proc/meminfo (Linux), with fallback
+fn read_mem_available_mb() -> Option<u64> {
+    let content = std::fs::read_to_string("/proc/meminfo").ok()?;
+    for line in content.lines() {
+        if line.starts_with("MemAvailable:") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                if let Ok(kb) = parts[1].parse::<u64>() {
+                    return Some(kb / 1024);
+                }
+            }
+        }
+    }
+    // Fallback to MemFree if MemAvailable not present (older kernels)
+    for line in content.lines() {
+        if line.starts_with("MemFree:") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                if let Ok(kb) = parts[1].parse::<u64>() {
+                    return Some(kb / 1024);
+                }
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]

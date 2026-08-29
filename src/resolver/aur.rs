@@ -10,32 +10,46 @@ const AUR_RPC_URL: &str = "https://aur.archlinux.org/rpc/v5";
 /// AUR package info
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AurPackage {
+    /// Package name
     #[serde(rename = "Name")]
     pub name: String,
+    /// Package version string
     #[serde(rename = "Version")]
     pub version: String,
+    /// Package description, if available
     #[serde(rename = "Description")]
     pub description: Option<String>,
+    /// Upstream project URL, if available
     #[serde(rename = "URL")]
     pub url: Option<String>,
+    /// Base package name for split packages
     #[serde(rename = "PackageBase")]
     pub package_base: String,
+    /// Number of votes on AUR
     #[serde(rename = "NumVotes")]
     pub num_votes: u32,
+    /// Popularity score as reported by AUR
     #[serde(rename = "Popularity")]
     pub popularity: f64,
+    /// Unix timestamp when flagged out-of-date, if any
     #[serde(rename = "OutOfDate")]
     pub out_of_date: Option<i64>,
+    /// Maintainer username, if any
     #[serde(rename = "Maintainer")]
     pub maintainer: Option<String>,
+    /// Unix timestamp when first submitted to AUR
     #[serde(rename = "FirstSubmitted")]
     pub first_submitted: i64,
+    /// Unix timestamp of last modification
     #[serde(rename = "LastModified")]
     pub last_modified: i64,
+    /// Virtual packages or capabilities this package provides
     #[serde(rename = "Provides")]
     pub provides: Option<Vec<String>>,
+    /// Packages this package replaces
     #[serde(rename = "Replaces")]
     pub replaces: Option<Vec<String>>,
+    /// Packages this package conflicts with
     #[serde(rename = "Conflicts")]
     pub conflicts: Option<Vec<String>>,
 }
@@ -43,14 +57,39 @@ pub struct AurPackage {
 /// AUR RPC response
 #[derive(Debug, Deserialize)]
 struct AurResponse {
+    /// Number of results reported by the API
     #[serde(rename = "resultcount")]
     result_count: usize,
+    /// List of packages returned by the API
     #[serde(rename = "results")]
     results: Vec<AurPackage>,
+    /// Response type string, e.g. `"search"` or `"multiinfo"`
     #[serde(rename = "type")]
     response_type: Option<String>,
+    /// Error message if the request failed
     #[serde(rename = "error")]
     error: Option<String>,
+}
+
+impl AurResponse {
+    /// Validate that `result_count` matches the actual number of deserialized results
+    /// and log the response type for diagnostics.
+    ///
+    /// Returns `true` if the count is consistent.
+    fn validate(&self) -> bool {
+        if let Some(ty) = &self.response_type {
+            tracing::debug!("AUR response type: {}", ty);
+        }
+        if self.result_count != self.results.len() {
+            tracing::warn!(
+                "AUR resultcount mismatch: header says {} but got {} results",
+                self.result_count,
+                self.results.len()
+            );
+            return false;
+        }
+        true
+    }
 }
 
 /// Client for interacting with AUR
@@ -116,6 +155,15 @@ impl AurClient {
         if let Some(err) = aur_resp.error {
             return Err(RexebError::AurApi(err));
         }
+
+        // Use result_count and response_type fields via validation and tracing
+        aur_resp.validate();
+        tracing::debug!(
+            "AUR request to {} returned result_count={} (actual {} results)",
+            url,
+            aur_resp.result_count,
+            aur_resp.results.len()
+        );
 
         Ok(aur_resp.results)
     }

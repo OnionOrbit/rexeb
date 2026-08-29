@@ -1,0 +1,3541 @@
+{
+  "version": 1,
+  "generated_at": "2026-08-29T13:41:46.705063Z",
+  "count": 589,
+  "mappings": {
+    "adduser": {
+      "debian_name": "adduser",
+      "arch_name": "shadow",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "adwaita-icon-theme": {
+      "debian_name": "adwaita-icon-theme",
+      "arch_name": "adwaita-icon-theme",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "autoconf": {
+      "debian_name": "autoconf",
+      "arch_name": "autoconf",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "automake": {
+      "debian_name": "automake",
+      "arch_name": "automake",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "bash": {
+      "debian_name": "bash",
+      "arch_name": "bash",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "binutils": {
+      "debian_name": "binutils",
+      "arch_name": "binutils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "bison": {
+      "debian_name": "bison",
+      "arch_name": "bison",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "bluez": {
+      "debian_name": "bluez",
+      "arch_name": "bluez",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "build-essential": {
+      "debian_name": "build-essential",
+      "arch_name": "base-devel",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "bzip2": {
+      "debian_name": "bzip2",
+      "arch_name": "bzip2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "ca-certificates": {
+      "debian_name": "ca-certificates",
+      "arch_name": "ca-certificates",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "clang": {
+      "debian_name": "clang",
+      "arch_name": "clang",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "cmake": {
+      "debian_name": "cmake",
+      "arch_name": "cmake",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "colord": {
+      "debian_name": "colord",
+      "arch_name": "colord",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "coreutils": {
+      "debian_name": "coreutils",
+      "arch_name": "coreutils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "curl": {
+      "debian_name": "curl",
+      "arch_name": "curl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "dash": {
+      "debian_name": "dash",
+      "arch_name": "dash",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "dbus": {
+      "debian_name": "dbus",
+      "arch_name": "dbus",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "dconf-gsettings-backend": {
+      "debian_name": "dconf-gsettings-backend",
+      "arch_name": "dconf",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "default-jdk": {
+      "debian_name": "default-jdk",
+      "arch_name": "java-sdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "default-jdk-headless": {
+      "debian_name": "default-jdk-headless",
+      "arch_name": "java-sdk",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "default-jre": {
+      "debian_name": "default-jre",
+      "arch_name": "java-runtime",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "default-jre-headless": {
+      "debian_name": "default-jre-headless",
+      "arch_name": "java-runtime-headless",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "default-mysql-client": {
+      "debian_name": "default-mysql-client",
+      "arch_name": "mariadb",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "desktop-file-utils": {
+      "debian_name": "desktop-file-utils",
+      "arch_name": "desktop-file-utils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "diffutils": {
+      "debian_name": "diffutils",
+      "arch_name": "diffutils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "dnsutils": {
+      "debian_name": "dnsutils",
+      "arch_name": "bind-tools",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "ffmpeg": {
+      "debian_name": "ffmpeg",
+      "arch_name": "ffmpeg",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "file": {
+      "debian_name": "file",
+      "arch_name": "file",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "findutils": {
+      "debian_name": "findutils",
+      "arch_name": "findutils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fish": {
+      "debian_name": "fish",
+      "arch_name": "fish",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "flex": {
+      "debian_name": "flex",
+      "arch_name": "flex",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fontconfig": {
+      "debian_name": "fontconfig",
+      "arch_name": "fontconfig",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fontconfig-config": {
+      "debian_name": "fontconfig-config",
+      "arch_name": "fontconfig",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "fonts-dejavu": {
+      "debian_name": "fonts-dejavu",
+      "arch_name": "ttf-dejavu",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-dejavu-core": {
+      "debian_name": "fonts-dejavu-core",
+      "arch_name": "ttf-dejavu",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-dejavu-extra": {
+      "debian_name": "fonts-dejavu-extra",
+      "arch_name": "ttf-dejavu",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "fonts-droid-fallback": {
+      "debian_name": "fonts-droid-fallback",
+      "arch_name": "noto-fonts",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "fonts-firacode": {
+      "debian_name": "fonts-firacode",
+      "arch_name": "ttf-fira-code",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-font-awesome": {
+      "debian_name": "fonts-font-awesome",
+      "arch_name": "ttf-font-awesome",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-hack": {
+      "debian_name": "fonts-hack",
+      "arch_name": "ttf-hack",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-liberation": {
+      "debian_name": "fonts-liberation",
+      "arch_name": "ttf-liberation",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-noto": {
+      "debian_name": "fonts-noto",
+      "arch_name": "noto-fonts",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-noto-cjk": {
+      "debian_name": "fonts-noto-cjk",
+      "arch_name": "noto-fonts-cjk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-noto-color-emoji": {
+      "debian_name": "fonts-noto-color-emoji",
+      "arch_name": "noto-fonts-emoji",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-roboto": {
+      "debian_name": "fonts-roboto",
+      "arch_name": "ttf-roboto",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fonts-ubuntu": {
+      "debian_name": "fonts-ubuntu",
+      "arch_name": "ttf-ubuntu-font-family",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fuse": {
+      "debian_name": "fuse",
+      "arch_name": "fuse2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "fuse3": {
+      "debian_name": "fuse3",
+      "arch_name": "fuse3",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "g++": {
+      "debian_name": "g++",
+      "arch_name": "gcc",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "gawk": {
+      "debian_name": "gawk",
+      "arch_name": "gawk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gcc": {
+      "debian_name": "gcc",
+      "arch_name": "gcc",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gdb": {
+      "debian_name": "gdb",
+      "arch_name": "gdb",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gettext": {
+      "debian_name": "gettext",
+      "arch_name": "gettext",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "git": {
+      "debian_name": "git",
+      "arch_name": "git",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "glib-networking": {
+      "debian_name": "glib-networking",
+      "arch_name": "glib-networking",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gnome-icon-theme": {
+      "debian_name": "gnome-icon-theme",
+      "arch_name": "adwaita-icon-theme",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gnupg": {
+      "debian_name": "gnupg",
+      "arch_name": "gnupg",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gpg": {
+      "debian_name": "gpg",
+      "arch_name": "gnupg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "grep": {
+      "debian_name": "grep",
+      "arch_name": "grep",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gsettings-desktop-schemas": {
+      "debian_name": "gsettings-desktop-schemas",
+      "arch_name": "gsettings-desktop-schemas",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gstreamer1.0-libav": {
+      "debian_name": "gstreamer1.0-libav",
+      "arch_name": "gst-libav",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gstreamer1.0-plugins-bad": {
+      "debian_name": "gstreamer1.0-plugins-bad",
+      "arch_name": "gst-plugins-bad",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gstreamer1.0-plugins-base": {
+      "debian_name": "gstreamer1.0-plugins-base",
+      "arch_name": "gst-plugins-base",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gstreamer1.0-plugins-good": {
+      "debian_name": "gstreamer1.0-plugins-good",
+      "arch_name": "gst-plugins-good",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gstreamer1.0-plugins-ugly": {
+      "debian_name": "gstreamer1.0-plugins-ugly",
+      "arch_name": "gst-plugins-ugly",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gvfs": {
+      "debian_name": "gvfs",
+      "arch_name": "gvfs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "gzip": {
+      "debian_name": "gzip",
+      "arch_name": "gzip",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "hicolor-icon-theme": {
+      "debian_name": "hicolor-icon-theme",
+      "arch_name": "hicolor-icon-theme",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "imagemagick": {
+      "debian_name": "imagemagick",
+      "arch_name": "imagemagick",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "intltool": {
+      "debian_name": "intltool",
+      "arch_name": "intltool",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "iproute2": {
+      "debian_name": "iproute2",
+      "arch_name": "iproute2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "iputils-ping": {
+      "debian_name": "iputils-ping",
+      "arch_name": "iputils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "java-runtime": {
+      "debian_name": "java-runtime",
+      "arch_name": "jre-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "java-runtime-headless": {
+      "debian_name": "java-runtime-headless",
+      "arch_name": "jre-openjdk-headless",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "java-sdk": {
+      "debian_name": "java-sdk",
+      "arch_name": "jdk-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "jdk-openjdk": {
+      "debian_name": "jdk-openjdk",
+      "arch_name": "jdk-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "jre-openjdk": {
+      "debian_name": "jre-openjdk",
+      "arch_name": "jre-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "less": {
+      "debian_name": "less",
+      "arch_name": "less",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libacl1": {
+      "debian_name": "libacl1",
+      "arch_name": "acl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libaom3": {
+      "debian_name": "libaom3",
+      "arch_name": "aom",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libapparmor1": {
+      "debian_name": "libapparmor1",
+      "arch_name": "apparmor",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libappindicator3-1": {
+      "debian_name": "libappindicator3-1",
+      "arch_name": "libappindicator-gtk3",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libarchive13": {
+      "debian_name": "libarchive13",
+      "arch_name": "libarchive",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libasound2": {
+      "debian_name": "libasound2",
+      "arch_name": "alsa-lib",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libasound2-data": {
+      "debian_name": "libasound2-data",
+      "arch_name": "alsa-lib",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libasound2-plugins": {
+      "debian_name": "libasound2-plugins",
+      "arch_name": "alsa-plugins",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libatk-bridge2.0-0": {
+      "debian_name": "libatk-bridge2.0-0",
+      "arch_name": "at-spi2-core",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libatk1.0-0": {
+      "debian_name": "libatk1.0-0",
+      "arch_name": "atk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libatomic1": {
+      "debian_name": "libatomic1",
+      "arch_name": "gcc-libs",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libatspi2.0-0": {
+      "debian_name": "libatspi2.0-0",
+      "arch_name": "at-spi2-core",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libattr1": {
+      "debian_name": "libattr1",
+      "arch_name": "attr",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libavcodec58": {
+      "debian_name": "libavcodec58",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavcodec59": {
+      "debian_name": "libavcodec59",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavcodec60": {
+      "debian_name": "libavcodec60",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavfilter7": {
+      "debian_name": "libavfilter7",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavfilter8": {
+      "debian_name": "libavfilter8",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavfilter9": {
+      "debian_name": "libavfilter9",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavformat58": {
+      "debian_name": "libavformat58",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavformat59": {
+      "debian_name": "libavformat59",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavformat60": {
+      "debian_name": "libavformat60",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavutil56": {
+      "debian_name": "libavutil56",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavutil57": {
+      "debian_name": "libavutil57",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavutil58": {
+      "debian_name": "libavutil58",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libayatana-appindicator3-1": {
+      "debian_name": "libayatana-appindicator3-1",
+      "arch_name": "libayatana-appindicator",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libblkid1": {
+      "debian_name": "libblkid1",
+      "arch_name": "util-linux-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libbluetooth3": {
+      "debian_name": "libbluetooth3",
+      "arch_name": "bluez-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libbrotli1": {
+      "debian_name": "libbrotli1",
+      "arch_name": "brotli",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libbz2-1.0": {
+      "debian_name": "libbz2-1.0",
+      "arch_name": "bzip2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libc6": {
+      "debian_name": "libc6",
+      "arch_name": "glibc",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libc6-dev": {
+      "debian_name": "libc6-dev",
+      "arch_name": "glibc",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libcairo-gobject2": {
+      "debian_name": "libcairo-gobject2",
+      "arch_name": "cairo",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libcairo-script-interpreter2": {
+      "debian_name": "libcairo-script-interpreter2",
+      "arch_name": "cairo",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libcairo2": {
+      "debian_name": "libcairo2",
+      "arch_name": "cairo",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libcanberra-gtk3-0": {
+      "debian_name": "libcanberra-gtk3-0",
+      "arch_name": "libcanberra",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libcanberra0": {
+      "debian_name": "libcanberra0",
+      "arch_name": "libcanberra",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libcap2": {
+      "debian_name": "libcap2",
+      "arch_name": "libcap",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libcolord2": {
+      "debian_name": "libcolord2",
+      "arch_name": "colord",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libcrypto1.1": {
+      "debian_name": "libcrypto1.1",
+      "arch_name": "openssl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libcrypto3": {
+      "debian_name": "libcrypto3",
+      "arch_name": "openssl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libcups2": {
+      "debian_name": "libcups2",
+      "arch_name": "cups",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libcurl3-gnutls": {
+      "debian_name": "libcurl3-gnutls",
+      "arch_name": "curl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libcurl4": {
+      "debian_name": "libcurl4",
+      "arch_name": "curl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libcurl4-gnutls-dev": {
+      "debian_name": "libcurl4-gnutls-dev",
+      "arch_name": "curl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libcurl4-openssl-dev": {
+      "debian_name": "libcurl4-openssl-dev",
+      "arch_name": "curl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libdav1d6": {
+      "debian_name": "libdav1d6",
+      "arch_name": "dav1d",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libdbus-1-3": {
+      "debian_name": "libdbus-1-3",
+      "arch_name": "dbus",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libdbusmenu-glib4": {
+      "debian_name": "libdbusmenu-glib4",
+      "arch_name": "libdbusmenu-glib",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libdbusmenu-gtk3-4": {
+      "debian_name": "libdbusmenu-gtk3-4",
+      "arch_name": "libdbusmenu-gtk3",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libdconf1": {
+      "debian_name": "libdconf1",
+      "arch_name": "dconf",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libdjvulibre21": {
+      "debian_name": "libdjvulibre21",
+      "arch_name": "djvulibre",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libdrm-common": {
+      "debian_name": "libdrm-common",
+      "arch_name": "libdrm",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libdrm2": {
+      "debian_name": "libdrm2",
+      "arch_name": "libdrm",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libedit2": {
+      "debian_name": "libedit2",
+      "arch_name": "libedit",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libegl1": {
+      "debian_name": "libegl1",
+      "arch_name": "libglvnd",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libegl1-mesa": {
+      "debian_name": "libegl1-mesa",
+      "arch_name": "mesa",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libenet7": {
+      "debian_name": "libenet7",
+      "arch_name": "enet",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libevdev2": {
+      "debian_name": "libevdev2",
+      "arch_name": "libevdev",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libexif12": {
+      "debian_name": "libexif12",
+      "arch_name": "libexif",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libexpat1": {
+      "debian_name": "libexpat1",
+      "arch_name": "expat",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libffi7": {
+      "debian_name": "libffi7",
+      "arch_name": "libffi",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libffi8": {
+      "debian_name": "libffi8",
+      "arch_name": "libffi",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libflac8": {
+      "debian_name": "libflac8",
+      "arch_name": "flac",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libfontconfig1": {
+      "debian_name": "libfontconfig1",
+      "arch_name": "fontconfig",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libfreetype6": {
+      "debian_name": "libfreetype6",
+      "arch_name": "freetype2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libfuse2": {
+      "debian_name": "libfuse2",
+      "arch_name": "fuse2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libfuse3-3": {
+      "debian_name": "libfuse3-3",
+      "arch_name": "fuse3",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgbm1": {
+      "debian_name": "libgbm1",
+      "arch_name": "mesa",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgcc-s1": {
+      "debian_name": "libgcc-s1",
+      "arch_name": "gcc-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgcc1": {
+      "debian_name": "libgcc1",
+      "arch_name": "gcc-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgcrypt20": {
+      "debian_name": "libgcrypt20",
+      "arch_name": "libgcrypt",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgdk-pixbuf-2.0-0": {
+      "debian_name": "libgdk-pixbuf-2.0-0",
+      "arch_name": "gdk-pixbuf2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgdk-pixbuf2.0-0": {
+      "debian_name": "libgdk-pixbuf2.0-0",
+      "arch_name": "gdk-pixbuf2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgif7": {
+      "debian_name": "libgif7",
+      "arch_name": "giflib",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgio-2.0-0": {
+      "debian_name": "libgio-2.0-0",
+      "arch_name": "glib2",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgl1": {
+      "debian_name": "libgl1",
+      "arch_name": "libglvnd",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgl1-mesa-dri": {
+      "debian_name": "libgl1-mesa-dri",
+      "arch_name": "mesa",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgl1-mesa-glx": {
+      "debian_name": "libgl1-mesa-glx",
+      "arch_name": "mesa",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgles2": {
+      "debian_name": "libgles2",
+      "arch_name": "libglvnd",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgles2-mesa": {
+      "debian_name": "libgles2-mesa",
+      "arch_name": "mesa",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libglew2.2": {
+      "debian_name": "libglew2.2",
+      "arch_name": "glew",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libglfw3": {
+      "debian_name": "libglfw3",
+      "arch_name": "glfw-x11",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libglib2.0-0": {
+      "debian_name": "libglib2.0-0",
+      "arch_name": "glib2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libglib2.0-data": {
+      "debian_name": "libglib2.0-data",
+      "arch_name": "glib2",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libglib2.0-dev": {
+      "debian_name": "libglib2.0-dev",
+      "arch_name": "glib2",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libglx-mesa0": {
+      "debian_name": "libglx-mesa0",
+      "arch_name": "mesa",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libglx0": {
+      "debian_name": "libglx0",
+      "arch_name": "libglvnd",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgmodule-2.0-0": {
+      "debian_name": "libgmodule-2.0-0",
+      "arch_name": "glib2",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgmp10": {
+      "debian_name": "libgmp10",
+      "arch_name": "gmp",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgnutls30": {
+      "debian_name": "libgnutls30",
+      "arch_name": "gnutls",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgobject-2.0-0": {
+      "debian_name": "libgobject-2.0-0",
+      "arch_name": "glib2",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgomp1": {
+      "debian_name": "libgomp1",
+      "arch_name": "gcc-libs",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgpg-error0": {
+      "debian_name": "libgpg-error0",
+      "arch_name": "libgpg-error",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgstreamer1.0-0": {
+      "debian_name": "libgstreamer1.0-0",
+      "arch_name": "gstreamer",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgthread-2.0-0": {
+      "debian_name": "libgthread-2.0-0",
+      "arch_name": "glib2",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgtk-3-0": {
+      "debian_name": "libgtk-3-0",
+      "arch_name": "gtk3",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgtk-3-common": {
+      "debian_name": "libgtk-3-common",
+      "arch_name": "gtk3",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgtk-3-dev": {
+      "debian_name": "libgtk-3-dev",
+      "arch_name": "gtk3",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgtk-4-1": {
+      "debian_name": "libgtk-4-1",
+      "arch_name": "gtk4",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgtk2.0-0": {
+      "debian_name": "libgtk2.0-0",
+      "arch_name": "gtk2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgudev-1.0-0": {
+      "debian_name": "libgudev-1.0-0",
+      "arch_name": "libgudev",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgvfscommon0": {
+      "debian_name": "libgvfscommon0",
+      "arch_name": "gvfs",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libharfbuzz0b": {
+      "debian_name": "libharfbuzz0b",
+      "arch_name": "harfbuzz",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libheif1": {
+      "debian_name": "libheif1",
+      "arch_name": "libheif",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libhiredis0.14": {
+      "debian_name": "libhiredis0.14",
+      "arch_name": "hiredis",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libhogweed6": {
+      "debian_name": "libhogweed6",
+      "arch_name": "nettle",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libidn2-0": {
+      "debian_name": "libidn2-0",
+      "arch_name": "libidn2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libimobiledevice6": {
+      "debian_name": "libimobiledevice6",
+      "arch_name": "libimobiledevice",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libinput10": {
+      "debian_name": "libinput10",
+      "arch_name": "libinput",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libjack-jackd2-0": {
+      "debian_name": "libjack-jackd2-0",
+      "arch_name": "jack2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libjack0": {
+      "debian_name": "libjack0",
+      "arch_name": "jack2",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libjavascriptcoregtk-4.0-18": {
+      "debian_name": "libjavascriptcoregtk-4.0-18",
+      "arch_name": "webkit2gtk",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libjpeg-dev": {
+      "debian_name": "libjpeg-dev",
+      "arch_name": "libjpeg-turbo",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libjpeg-turbo8": {
+      "debian_name": "libjpeg-turbo8",
+      "arch_name": "libjpeg-turbo",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libjpeg62-turbo": {
+      "debian_name": "libjpeg62-turbo",
+      "arch_name": "libjpeg-turbo",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libjpeg8": {
+      "debian_name": "libjpeg8",
+      "arch_name": "libjpeg-turbo",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libjson-c5": {
+      "debian_name": "libjson-c5",
+      "arch_name": "json-c",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libjson-glib-1.0-0": {
+      "debian_name": "libjson-glib-1.0-0",
+      "arch_name": "json-glib",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libjxl0.7": {
+      "debian_name": "libjxl0.7",
+      "arch_name": "libjxl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "liblcms2-2": {
+      "debian_name": "liblcms2-2",
+      "arch_name": "lcms2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "liblz4-1": {
+      "debian_name": "liblz4-1",
+      "arch_name": "lz4",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "liblzma5": {
+      "debian_name": "liblzma5",
+      "arch_name": "xz",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "liblzo2-2": {
+      "debian_name": "liblzo2-2",
+      "arch_name": "lzo",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmagickcore-6.q16-6": {
+      "debian_name": "libmagickcore-6.q16-6",
+      "arch_name": "imagemagick",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libmagickwand-6.q16-6": {
+      "debian_name": "libmagickwand-6.q16-6",
+      "arch_name": "imagemagick",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libmariadb3": {
+      "debian_name": "libmariadb3",
+      "arch_name": "mariadb-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmnl0": {
+      "debian_name": "libmnl0",
+      "arch_name": "libmnl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmongoc-1.0-0": {
+      "debian_name": "libmongoc-1.0-0",
+      "arch_name": "mongo-c-driver",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmount1": {
+      "debian_name": "libmount1",
+      "arch_name": "util-linux-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmp3lame0": {
+      "debian_name": "libmp3lame0",
+      "arch_name": "lame",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmpc3": {
+      "debian_name": "libmpc3",
+      "arch_name": "libmpc",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmpfr6": {
+      "debian_name": "libmpfr6",
+      "arch_name": "mpfr",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmpg123-0": {
+      "debian_name": "libmpg123-0",
+      "arch_name": "mpg123",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmtdev1": {
+      "debian_name": "libmtdev1",
+      "arch_name": "mtdev",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libmysqlclient21": {
+      "debian_name": "libmysqlclient21",
+      "arch_name": "mariadb-libs",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libncurses6": {
+      "debian_name": "libncurses6",
+      "arch_name": "ncurses",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libncursesw6": {
+      "debian_name": "libncursesw6",
+      "arch_name": "ncurses",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libnettle8": {
+      "debian_name": "libnettle8",
+      "arch_name": "nettle",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libnftnl11": {
+      "debian_name": "libnftnl11",
+      "arch_name": "libnftnl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libnghttp2-14": {
+      "debian_name": "libnghttp2-14",
+      "arch_name": "libnghttp2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libnl-3-200": {
+      "debian_name": "libnl-3-200",
+      "arch_name": "libnl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libnl-genl-3-200": {
+      "debian_name": "libnl-genl-3-200",
+      "arch_name": "libnl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libnl-route-3-200": {
+      "debian_name": "libnl-route-3-200",
+      "arch_name": "libnl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libnm0": {
+      "debian_name": "libnm0",
+      "arch_name": "networkmanager",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libnode108": {
+      "debian_name": "libnode108",
+      "arch_name": "nodejs",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libnode72": {
+      "debian_name": "libnode72",
+      "arch_name": "nodejs",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libnotify4": {
+      "debian_name": "libnotify4",
+      "arch_name": "libnotify",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libnspr4": {
+      "debian_name": "libnspr4",
+      "arch_name": "nspr",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libnss3": {
+      "debian_name": "libnss3",
+      "arch_name": "nss",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libogg0": {
+      "debian_name": "libogg0",
+      "arch_name": "libogg",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libopenal1": {
+      "debian_name": "libopenal1",
+      "arch_name": "openal",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libopencv-core4.5": {
+      "debian_name": "libopencv-core4.5",
+      "arch_name": "opencv",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libopenjp2-7": {
+      "debian_name": "libopenjp2-7",
+      "arch_name": "openjpeg2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libopenscenegraph161": {
+      "debian_name": "libopenscenegraph161",
+      "arch_name": "openscenegraph",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libopus0": {
+      "debian_name": "libopus0",
+      "arch_name": "opus",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libp11-kit0": {
+      "debian_name": "libp11-kit0",
+      "arch_name": "p11-kit",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpango-1.0-0": {
+      "debian_name": "libpango-1.0-0",
+      "arch_name": "pango",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpangocairo-1.0-0": {
+      "debian_name": "libpangocairo-1.0-0",
+      "arch_name": "pango",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libpangoft2-1.0-0": {
+      "debian_name": "libpangoft2-1.0-0",
+      "arch_name": "pango",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libpangoxft-1.0-0": {
+      "debian_name": "libpangoxft-1.0-0",
+      "arch_name": "pango",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libpci3": {
+      "debian_name": "libpci3",
+      "arch_name": "pciutils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpcre2-8-0": {
+      "debian_name": "libpcre2-8-0",
+      "arch_name": "pcre2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpcre3": {
+      "debian_name": "libpcre3",
+      "arch_name": "pcre",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libperl5.36": {
+      "debian_name": "libperl5.36",
+      "arch_name": "perl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libperl5.38": {
+      "debian_name": "libperl5.38",
+      "arch_name": "perl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libpipewire-0.3-0": {
+      "debian_name": "libpipewire-0.3-0",
+      "arch_name": "pipewire",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpng-dev": {
+      "debian_name": "libpng-dev",
+      "arch_name": "libpng",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libpng16-16": {
+      "debian_name": "libpng16-16",
+      "arch_name": "libpng",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpolkit-gobject-1-0": {
+      "debian_name": "libpolkit-gobject-1-0",
+      "arch_name": "polkit",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpoppler-glib8": {
+      "debian_name": "libpoppler-glib8",
+      "arch_name": "poppler-glib",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpoppler118": {
+      "debian_name": "libpoppler118",
+      "arch_name": "poppler",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libportaudio2": {
+      "debian_name": "libportaudio2",
+      "arch_name": "portaudio",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpostproc55": {
+      "debian_name": "libpostproc55",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libpostproc56": {
+      "debian_name": "libpostproc56",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libpq5": {
+      "debian_name": "libpq5",
+      "arch_name": "postgresql-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpulse-mainloop-glib0": {
+      "debian_name": "libpulse-mainloop-glib0",
+      "arch_name": "libpulse",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libpulse0": {
+      "debian_name": "libpulse0",
+      "arch_name": "libpulse",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libpython3-stdlib": {
+      "debian_name": "libpython3-stdlib",
+      "arch_name": "python",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "libpython3.11-stdlib": {
+      "debian_name": "libpython3.11-stdlib",
+      "arch_name": "python",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "libpython3.12-stdlib": {
+      "debian_name": "libpython3.12-stdlib",
+      "arch_name": "python",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "libqt5concurrent5": {
+      "debian_name": "libqt5concurrent5",
+      "arch_name": "qt5-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5core5a": {
+      "debian_name": "libqt5core5a",
+      "arch_name": "qt5-base",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5dbus5": {
+      "debian_name": "libqt5dbus5",
+      "arch_name": "qt5-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5gui5": {
+      "debian_name": "libqt5gui5",
+      "arch_name": "qt5-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5multimedia5": {
+      "debian_name": "libqt5multimedia5",
+      "arch_name": "qt5-multimedia",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5network5": {
+      "debian_name": "libqt5network5",
+      "arch_name": "qt5-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5opengl5": {
+      "debian_name": "libqt5opengl5",
+      "arch_name": "qt5-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5positioning5": {
+      "debian_name": "libqt5positioning5",
+      "arch_name": "qt5-location",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5printsupport5": {
+      "debian_name": "libqt5printsupport5",
+      "arch_name": "qt5-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5qml5": {
+      "debian_name": "libqt5qml5",
+      "arch_name": "qt5-declarative",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5quick5": {
+      "debian_name": "libqt5quick5",
+      "arch_name": "qt5-declarative",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5sensors5": {
+      "debian_name": "libqt5sensors5",
+      "arch_name": "qt5-sensors",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5serialport5": {
+      "debian_name": "libqt5serialport5",
+      "arch_name": "qt5-serialport",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5sql5": {
+      "debian_name": "libqt5sql5",
+      "arch_name": "qt5-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5svg5": {
+      "debian_name": "libqt5svg5",
+      "arch_name": "qt5-svg",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5webchannel5": {
+      "debian_name": "libqt5webchannel5",
+      "arch_name": "qt5-webchannel",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5webengine5": {
+      "debian_name": "libqt5webengine5",
+      "arch_name": "qt5-webengine",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5webenginewidgets5": {
+      "debian_name": "libqt5webenginewidgets5",
+      "arch_name": "qt5-webengine",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5webkit5": {
+      "debian_name": "libqt5webkit5",
+      "arch_name": "qt5-webkit",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5websockets5": {
+      "debian_name": "libqt5websockets5",
+      "arch_name": "qt5-websockets",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5widgets5": {
+      "debian_name": "libqt5widgets5",
+      "arch_name": "qt5-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt5x11extras5": {
+      "debian_name": "libqt5x11extras5",
+      "arch_name": "qt5-x11extras",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt5xml5": {
+      "debian_name": "libqt5xml5",
+      "arch_name": "qt5-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt6core6": {
+      "debian_name": "libqt6core6",
+      "arch_name": "qt6-base",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt6dbus6": {
+      "debian_name": "libqt6dbus6",
+      "arch_name": "qt6-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt6gui6": {
+      "debian_name": "libqt6gui6",
+      "arch_name": "qt6-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt6network6": {
+      "debian_name": "libqt6network6",
+      "arch_name": "qt6-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt6opengl6": {
+      "debian_name": "libqt6opengl6",
+      "arch_name": "qt6-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libqt6svg6": {
+      "debian_name": "libqt6svg6",
+      "arch_name": "qt6-svg",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt6webengine6": {
+      "debian_name": "libqt6webengine6",
+      "arch_name": "qt6-webengine",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libqt6widgets6": {
+      "debian_name": "libqt6widgets6",
+      "arch_name": "qt6-base",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libraw20": {
+      "debian_name": "libraw20",
+      "arch_name": "libraw",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libreadline8": {
+      "debian_name": "libreadline8",
+      "arch_name": "readline",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "librsvg2-2": {
+      "debian_name": "librsvg2-2",
+      "arch_name": "librsvg",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "librsvg2-common": {
+      "debian_name": "librsvg2-common",
+      "arch_name": "librsvg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libruby3.0": {
+      "debian_name": "libruby3.0",
+      "arch_name": "ruby",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libruby3.1": {
+      "debian_name": "libruby3.1",
+      "arch_name": "ruby",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libsdl1.2debian": {
+      "debian_name": "libsdl1.2debian",
+      "arch_name": "sdl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsdl2-2.0-0": {
+      "debian_name": "libsdl2-2.0-0",
+      "arch_name": "sdl2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsdl2-gfx-1.0-0": {
+      "debian_name": "libsdl2-gfx-1.0-0",
+      "arch_name": "sdl2_gfx",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsdl2-image-2.0-0": {
+      "debian_name": "libsdl2-image-2.0-0",
+      "arch_name": "sdl2_image",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsdl2-mixer-2.0-0": {
+      "debian_name": "libsdl2-mixer-2.0-0",
+      "arch_name": "sdl2_mixer",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsdl2-net-2.0-0": {
+      "debian_name": "libsdl2-net-2.0-0",
+      "arch_name": "sdl2_net",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsdl2-ttf-2.0-0": {
+      "debian_name": "libsdl2-ttf-2.0-0",
+      "arch_name": "sdl2_ttf",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libseccomp2": {
+      "debian_name": "libseccomp2",
+      "arch_name": "libseccomp",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsecret-1-0": {
+      "debian_name": "libsecret-1-0",
+      "arch_name": "libsecret",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libselinux1": {
+      "debian_name": "libselinux1",
+      "arch_name": "libselinux",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsnappy1v5": {
+      "debian_name": "libsnappy1v5",
+      "arch_name": "snappy",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsndfile1": {
+      "debian_name": "libsndfile1",
+      "arch_name": "libsndfile",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsodium23": {
+      "debian_name": "libsodium23",
+      "arch_name": "libsodium",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsoup-3.0-0": {
+      "debian_name": "libsoup-3.0-0",
+      "arch_name": "libsoup3",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsoup2.4-1": {
+      "debian_name": "libsoup2.4-1",
+      "arch_name": "libsoup",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libsqlite3-0": {
+      "debian_name": "libsqlite3-0",
+      "arch_name": "sqlite",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libssh-4": {
+      "debian_name": "libssh-4",
+      "arch_name": "libssh",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libssh2-1": {
+      "debian_name": "libssh2-1",
+      "arch_name": "libssh2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libssl-dev": {
+      "debian_name": "libssl-dev",
+      "arch_name": "openssl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libssl1.1": {
+      "debian_name": "libssl1.1",
+      "arch_name": "openssl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libssl3": {
+      "debian_name": "libssl3",
+      "arch_name": "openssl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libstdc++-dev": {
+      "debian_name": "libstdc++-dev",
+      "arch_name": "gcc",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libstdc++6": {
+      "debian_name": "libstdc++6",
+      "arch_name": "gcc-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libswresample3": {
+      "debian_name": "libswresample3",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libswresample4": {
+      "debian_name": "libswresample4",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libswscale5": {
+      "debian_name": "libswscale5",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libswscale6": {
+      "debian_name": "libswscale6",
+      "arch_name": "ffmpeg",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libsystemd0": {
+      "debian_name": "libsystemd0",
+      "arch_name": "systemd-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libtasn1-6": {
+      "debian_name": "libtasn1-6",
+      "arch_name": "libtasn1",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libtheora0": {
+      "debian_name": "libtheora0",
+      "arch_name": "libtheora",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libtiff5": {
+      "debian_name": "libtiff5",
+      "arch_name": "libtiff",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libtiff6": {
+      "debian_name": "libtiff6",
+      "arch_name": "libtiff",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libtinfo6": {
+      "debian_name": "libtinfo6",
+      "arch_name": "ncurses",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libtool": {
+      "debian_name": "libtool",
+      "arch_name": "libtool",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libudev1": {
+      "debian_name": "libudev1",
+      "arch_name": "systemd-libs",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libunistring2": {
+      "debian_name": "libunistring2",
+      "arch_name": "libunistring",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libusb-1.0-0": {
+      "debian_name": "libusb-1.0-0",
+      "arch_name": "libusb",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libusbmuxd6": {
+      "debian_name": "libusbmuxd6",
+      "arch_name": "libusbmuxd",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libuuid1": {
+      "debian_name": "libuuid1",
+      "arch_name": "util-linux-libs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libv4l-0": {
+      "debian_name": "libv4l-0",
+      "arch_name": "v4l-utils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libva-drm2": {
+      "debian_name": "libva-drm2",
+      "arch_name": "libva",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libva-x11-2": {
+      "debian_name": "libva-x11-2",
+      "arch_name": "libva",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libva2": {
+      "debian_name": "libva2",
+      "arch_name": "libva",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libvdpau1": {
+      "debian_name": "libvdpau1",
+      "arch_name": "libvdpau",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libvorbis0a": {
+      "debian_name": "libvorbis0a",
+      "arch_name": "libvorbis",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libvorbisenc2": {
+      "debian_name": "libvorbisenc2",
+      "arch_name": "libvorbis",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libvorbisfile3": {
+      "debian_name": "libvorbisfile3",
+      "arch_name": "libvorbis",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libvpx7": {
+      "debian_name": "libvpx7",
+      "arch_name": "libvpx",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libvulkan1": {
+      "debian_name": "libvulkan1",
+      "arch_name": "vulkan-icd-loader",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libwacom2": {
+      "debian_name": "libwacom2",
+      "arch_name": "libwacom",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libwayland-client0": {
+      "debian_name": "libwayland-client0",
+      "arch_name": "wayland",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libwayland-cursor0": {
+      "debian_name": "libwayland-cursor0",
+      "arch_name": "wayland",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libwayland-egl1": {
+      "debian_name": "libwayland-egl1",
+      "arch_name": "wayland",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libwayland-server0": {
+      "debian_name": "libwayland-server0",
+      "arch_name": "wayland",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libwebkit2gtk-4.0-37": {
+      "debian_name": "libwebkit2gtk-4.0-37",
+      "arch_name": "webkit2gtk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libwebkit2gtk-4.1-0": {
+      "debian_name": "libwebkit2gtk-4.1-0",
+      "arch_name": "webkit2gtk-4.1",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libwebp6": {
+      "debian_name": "libwebp6",
+      "arch_name": "libwebp",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libwebp7": {
+      "debian_name": "libwebp7",
+      "arch_name": "libwebp",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libwebpdemux2": {
+      "debian_name": "libwebpdemux2",
+      "arch_name": "libwebp",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libwebpmux3": {
+      "debian_name": "libwebpmux3",
+      "arch_name": "libwebp",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libx11-6": {
+      "debian_name": "libx11-6",
+      "arch_name": "libx11",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libx11-dev": {
+      "debian_name": "libx11-dev",
+      "arch_name": "libx11",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libx11-xcb1": {
+      "debian_name": "libx11-xcb1",
+      "arch_name": "libx11",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libx264-163": {
+      "debian_name": "libx264-163",
+      "arch_name": "x264",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libx265-199": {
+      "debian_name": "libx265-199",
+      "arch_name": "x265",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxcb-icccm4": {
+      "debian_name": "libxcb-icccm4",
+      "arch_name": "xcb-util-wm",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxcb-image0": {
+      "debian_name": "libxcb-image0",
+      "arch_name": "libxcb",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libxcb-keysyms1": {
+      "debian_name": "libxcb-keysyms1",
+      "arch_name": "libxcb",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libxcb-randr0": {
+      "debian_name": "libxcb-randr0",
+      "arch_name": "libxcb",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libxcb-render0": {
+      "debian_name": "libxcb-render0",
+      "arch_name": "libxcb",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libxcb-shape0": {
+      "debian_name": "libxcb-shape0",
+      "arch_name": "libxcb",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libxcb-shm0": {
+      "debian_name": "libxcb-shm0",
+      "arch_name": "libxcb",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libxcb-util1": {
+      "debian_name": "libxcb-util1",
+      "arch_name": "xcb-util",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxcb-xfixes0": {
+      "debian_name": "libxcb-xfixes0",
+      "arch_name": "libxcb",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libxcb1": {
+      "debian_name": "libxcb1",
+      "arch_name": "libxcb",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxcomposite1": {
+      "debian_name": "libxcomposite1",
+      "arch_name": "libxcomposite",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxcursor1": {
+      "debian_name": "libxcursor1",
+      "arch_name": "libxcursor",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxdamage1": {
+      "debian_name": "libxdamage1",
+      "arch_name": "libxdamage",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxext6": {
+      "debian_name": "libxext6",
+      "arch_name": "libxext",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxfixes3": {
+      "debian_name": "libxfixes3",
+      "arch_name": "libxfixes",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxi6": {
+      "debian_name": "libxi6",
+      "arch_name": "libxi",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxinerama1": {
+      "debian_name": "libxinerama1",
+      "arch_name": "libxinerama",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxkbcommon-x11-0": {
+      "debian_name": "libxkbcommon-x11-0",
+      "arch_name": "libxkbcommon-x11",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxkbcommon0": {
+      "debian_name": "libxkbcommon0",
+      "arch_name": "libxkbcommon",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxml2": {
+      "debian_name": "libxml2",
+      "arch_name": "libxml2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxml2-utils": {
+      "debian_name": "libxml2-utils",
+      "arch_name": "libxml2",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libxmu6": {
+      "debian_name": "libxmu6",
+      "arch_name": "libxmu",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxpm4": {
+      "debian_name": "libxpm4",
+      "arch_name": "libxpm",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxrandr2": {
+      "debian_name": "libxrandr2",
+      "arch_name": "libxrandr",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxrender1": {
+      "debian_name": "libxrender1",
+      "arch_name": "libxrender",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxslt1.1": {
+      "debian_name": "libxslt1.1",
+      "arch_name": "libxslt",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxss1": {
+      "debian_name": "libxss1",
+      "arch_name": "libxss",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxt6": {
+      "debian_name": "libxt6",
+      "arch_name": "libxt",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxtst6": {
+      "debian_name": "libxtst6",
+      "arch_name": "libxtst",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxv1": {
+      "debian_name": "libxv1",
+      "arch_name": "libxv",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libxxf86vm1": {
+      "debian_name": "libxxf86vm1",
+      "arch_name": "libxxf86vm",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libyaml-0-2": {
+      "debian_name": "libyaml-0-2",
+      "arch_name": "libyaml",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libzstd1": {
+      "debian_name": "libzstd1",
+      "arch_name": "zstd",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "llvm": {
+      "debian_name": "llvm",
+      "arch_name": "llvm",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "login": {
+      "debian_name": "login",
+      "arch_name": "shadow",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "lsof": {
+      "debian_name": "lsof",
+      "arch_name": "lsof",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "m4": {
+      "debian_name": "m4",
+      "arch_name": "m4",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "make": {
+      "debian_name": "make",
+      "arch_name": "make",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "mawk": {
+      "debian_name": "mawk",
+      "arch_name": "gawk",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "mercurial": {
+      "debian_name": "mercurial",
+      "arch_name": "mercurial",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "mime-support": {
+      "debian_name": "mime-support",
+      "arch_name": "mailcap",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "nasm": {
+      "debian_name": "nasm",
+      "arch_name": "nasm",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "net-tools": {
+      "debian_name": "net-tools",
+      "arch_name": "net-tools",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "netcat-openbsd": {
+      "debian_name": "netcat-openbsd",
+      "arch_name": "openbsd-netcat",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "network-manager": {
+      "debian_name": "network-manager",
+      "arch_name": "networkmanager",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "nodejs": {
+      "debian_name": "nodejs",
+      "arch_name": "nodejs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "npm": {
+      "debian_name": "npm",
+      "arch_name": "npm",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-11-jdk": {
+      "debian_name": "openjdk-11-jdk",
+      "arch_name": "jdk11-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-11-jdk-headless": {
+      "debian_name": "openjdk-11-jdk-headless",
+      "arch_name": "jdk11-openjdk",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "openjdk-11-jre": {
+      "debian_name": "openjdk-11-jre",
+      "arch_name": "jre11-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-11-jre-headless": {
+      "debian_name": "openjdk-11-jre-headless",
+      "arch_name": "jre11-openjdk-headless",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-17-jdk": {
+      "debian_name": "openjdk-17-jdk",
+      "arch_name": "jdk17-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-17-jdk-headless": {
+      "debian_name": "openjdk-17-jdk-headless",
+      "arch_name": "jdk17-openjdk",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "openjdk-17-jre": {
+      "debian_name": "openjdk-17-jre",
+      "arch_name": "jre17-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-17-jre-headless": {
+      "debian_name": "openjdk-17-jre-headless",
+      "arch_name": "jre17-openjdk-headless",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-21-jdk": {
+      "debian_name": "openjdk-21-jdk",
+      "arch_name": "jdk21-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-21-jdk-headless": {
+      "debian_name": "openjdk-21-jdk-headless",
+      "arch_name": "jdk21-openjdk",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "openjdk-21-jre": {
+      "debian_name": "openjdk-21-jre",
+      "arch_name": "jre21-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-21-jre-headless": {
+      "debian_name": "openjdk-21-jre-headless",
+      "arch_name": "jre21-openjdk-headless",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-8-jdk": {
+      "debian_name": "openjdk-8-jdk",
+      "arch_name": "jdk8-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-8-jdk-headless": {
+      "debian_name": "openjdk-8-jdk-headless",
+      "arch_name": "jdk8-openjdk",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "openjdk-8-jre": {
+      "debian_name": "openjdk-8-jre",
+      "arch_name": "jre8-openjdk",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openjdk-8-jre-headless": {
+      "debian_name": "openjdk-8-jre-headless",
+      "arch_name": "jre8-openjdk-headless",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "openssh-client": {
+      "debian_name": "openssh-client",
+      "arch_name": "openssh",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "openssh-server": {
+      "debian_name": "openssh-server",
+      "arch_name": "openssh",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "openssl": {
+      "debian_name": "openssl",
+      "arch_name": "openssl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "p7zip": {
+      "debian_name": "p7zip",
+      "arch_name": "p7zip",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "passwd": {
+      "debian_name": "passwd",
+      "arch_name": "shadow",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "patch": {
+      "debian_name": "patch",
+      "arch_name": "patch",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "pciutils": {
+      "debian_name": "pciutils",
+      "arch_name": "pciutils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "perl": {
+      "debian_name": "perl",
+      "arch_name": "perl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "perl-base": {
+      "debian_name": "perl-base",
+      "arch_name": "perl",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "perl-modules-5.36": {
+      "debian_name": "perl-modules-5.36",
+      "arch_name": "perl",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "perl-modules-5.38": {
+      "debian_name": "perl-modules-5.38",
+      "arch_name": "perl",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "pipewire": {
+      "debian_name": "pipewire",
+      "arch_name": "pipewire",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "pkg-config": {
+      "debian_name": "pkg-config",
+      "arch_name": "pkgconf",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "policykit-1": {
+      "debian_name": "policykit-1",
+      "arch_name": "polkit",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "poppler-utils": {
+      "debian_name": "poppler-utils",
+      "arch_name": "poppler",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "postgresql-client": {
+      "debian_name": "postgresql-client",
+      "arch_name": "postgresql",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "procps": {
+      "debian_name": "procps",
+      "arch_name": "procps-ng",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "psmisc": {
+      "debian_name": "psmisc",
+      "arch_name": "psmisc",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "pulseaudio": {
+      "debian_name": "pulseaudio",
+      "arch_name": "pulseaudio",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "pulseaudio-utils": {
+      "debian_name": "pulseaudio-utils",
+      "arch_name": "pulseaudio",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "python3": {
+      "debian_name": "python3",
+      "arch_name": "python",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-cairo": {
+      "debian_name": "python3-cairo",
+      "arch_name": "python-cairo",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-cryptography": {
+      "debian_name": "python3-cryptography",
+      "arch_name": "python-cryptography",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-dbus": {
+      "debian_name": "python3-dbus",
+      "arch_name": "python-dbus",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-dev": {
+      "debian_name": "python3-dev",
+      "arch_name": "python",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "python3-distutils": {
+      "debian_name": "python3-distutils",
+      "arch_name": "python",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "python3-gi": {
+      "debian_name": "python3-gi",
+      "arch_name": "python-gobject",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-lxml": {
+      "debian_name": "python3-lxml",
+      "arch_name": "python-lxml",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-matplotlib": {
+      "debian_name": "python3-matplotlib",
+      "arch_name": "python-matplotlib",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-minimal": {
+      "debian_name": "python3-minimal",
+      "arch_name": "python",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "python3-numpy": {
+      "debian_name": "python3-numpy",
+      "arch_name": "python-numpy",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-openssl": {
+      "debian_name": "python3-openssl",
+      "arch_name": "python-pyopenssl",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-pandas": {
+      "debian_name": "python3-pandas",
+      "arch_name": "python-pandas",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-pil": {
+      "debian_name": "python3-pil",
+      "arch_name": "python-pillow",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-pip": {
+      "debian_name": "python3-pip",
+      "arch_name": "python-pip",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-requests": {
+      "debian_name": "python3-requests",
+      "arch_name": "python-requests",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-scipy": {
+      "debian_name": "python3-scipy",
+      "arch_name": "python-scipy",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-setuptools": {
+      "debian_name": "python3-setuptools",
+      "arch_name": "python-setuptools",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-urllib3": {
+      "debian_name": "python3-urllib3",
+      "arch_name": "python-urllib3",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-venv": {
+      "debian_name": "python3-venv",
+      "arch_name": "python",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "python3-wheel": {
+      "debian_name": "python3-wheel",
+      "arch_name": "python-wheel",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "python3-yaml": {
+      "debian_name": "python3-yaml",
+      "arch_name": "python-yaml",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "redis-tools": {
+      "debian_name": "redis-tools",
+      "arch_name": "redis",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "rsync": {
+      "debian_name": "rsync",
+      "arch_name": "rsync",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "ruby": {
+      "debian_name": "ruby",
+      "arch_name": "ruby",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "ruby3.0": {
+      "debian_name": "ruby3.0",
+      "arch_name": "ruby",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "ruby3.1": {
+      "debian_name": "ruby3.1",
+      "arch_name": "ruby",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "sed": {
+      "debian_name": "sed",
+      "arch_name": "sed",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "shared-mime-info": {
+      "debian_name": "shared-mime-info",
+      "arch_name": "shared-mime-info",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "socat": {
+      "debian_name": "socat",
+      "arch_name": "socat",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "sound-theme-freedesktop": {
+      "debian_name": "sound-theme-freedesktop",
+      "arch_name": "sound-theme-freedesktop",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "sqlite3": {
+      "debian_name": "sqlite3",
+      "arch_name": "sqlite",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "strace": {
+      "debian_name": "strace",
+      "arch_name": "strace",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "subversion": {
+      "debian_name": "subversion",
+      "arch_name": "subversion",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "sudo": {
+      "debian_name": "sudo",
+      "arch_name": "sudo",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "tar": {
+      "debian_name": "tar",
+      "arch_name": "tar",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "udev": {
+      "debian_name": "udev",
+      "arch_name": "systemd",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "unzip": {
+      "debian_name": "unzip",
+      "arch_name": "unzip",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "util-linux": {
+      "debian_name": "util-linux",
+      "arch_name": "util-linux",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "valgrind": {
+      "debian_name": "valgrind",
+      "arch_name": "valgrind",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "wget": {
+      "debian_name": "wget",
+      "arch_name": "wget",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "wget2": {
+      "debian_name": "wget2",
+      "arch_name": "wget2",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "x11-utils": {
+      "debian_name": "x11-utils",
+      "arch_name": "xorg-xprop",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "x11-xserver-utils": {
+      "debian_name": "x11-xserver-utils",
+      "arch_name": "xorg-xset",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "xdg-utils": {
+      "debian_name": "xdg-utils",
+      "arch_name": "xdg-utils",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "xz-utils": {
+      "debian_name": "xz-utils",
+      "arch_name": "xz",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "yasm": {
+      "debian_name": "yasm",
+      "arch_name": "yasm",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "zenity": {
+      "debian_name": "zenity",
+      "arch_name": "zenity",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "zip": {
+      "debian_name": "zip",
+      "arch_name": "zip",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "zlib1g": {
+      "debian_name": "zlib1g",
+      "arch_name": "zlib",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "zlib1g-dev": {
+      "debian_name": "zlib1g-dev",
+      "arch_name": "zlib",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "zsh": {
+      "debian_name": "zsh",
+      "arch_name": "zsh",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "dpkg": {
+      "debian_name": "dpkg",
+      "arch_name": "pacman",
+      "confidence": 0.6,
+      "source": "Builtin"
+    },
+    "apt": {
+      "debian_name": "apt",
+      "arch_name": "pacman",
+      "confidence": 0.6,
+      "source": "Builtin"
+    },
+    "systemd": {
+      "debian_name": "systemd",
+      "arch_name": "systemd",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "cron": {
+      "debian_name": "cron",
+      "arch_name": "cronie",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "logrotate": {
+      "debian_name": "logrotate",
+      "arch_name": "logrotate",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libkf5coreaddons5": {
+      "debian_name": "libkf5coreaddons5",
+      "arch_name": "kcoreaddons5",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "libkf5i18n5": {
+      "debian_name": "libkf5i18n5",
+      "arch_name": "ki18n5",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "libkf5configcore5": {
+      "debian_name": "libkf5configcore5",
+      "arch_name": "kconfig5",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "libkf5widgetsaddons5": {
+      "debian_name": "libkf5widgetsaddons5",
+      "arch_name": "kwidgetsaddons5",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "libkf5service5": {
+      "debian_name": "libkf5service5",
+      "arch_name": "kservice5",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "libkf5configgui5": {
+      "debian_name": "libkf5configgui5",
+      "arch_name": "kconfig5",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libkf5crash5": {
+      "debian_name": "libkf5crash5",
+      "arch_name": "kcrash5",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "libkf5dbusaddons5": {
+      "debian_name": "libkf5dbusaddons5",
+      "arch_name": "kdbusaddons5",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "libkf5globalaccel5": {
+      "debian_name": "libkf5globalaccel5",
+      "arch_name": "kglobalaccel5",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "libgtk4-media-gstreamer": {
+      "debian_name": "libgtk4-media-gstreamer",
+      "arch_name": "gtk4",
+      "confidence": 0.85,
+      "source": "Builtin"
+    },
+    "gir1.2-gtk-3.0": {
+      "debian_name": "gir1.2-gtk-3.0",
+      "arch_name": "gtk3",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gir1.2-gtk-4.0": {
+      "debian_name": "gir1.2-gtk-4.0",
+      "arch_name": "gtk4",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gir1.2-glib-2.0": {
+      "debian_name": "gir1.2-glib-2.0",
+      "arch_name": "glib2",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gir1.2-pango-1.0": {
+      "debian_name": "gir1.2-pango-1.0",
+      "arch_name": "pango",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gir1.2-cairo-1.0": {
+      "debian_name": "gir1.2-cairo-1.0",
+      "arch_name": "cairo",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gir1.2-webkit2-4.0": {
+      "debian_name": "gir1.2-webkit2-4.0",
+      "arch_name": "webkit2gtk",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gir1.2-webkit2-4.1": {
+      "debian_name": "gir1.2-webkit2-4.1",
+      "arch_name": "webkit2gtk-4.1",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gir1.2-soup-2.4": {
+      "debian_name": "gir1.2-soup-2.4",
+      "arch_name": "libsoup",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gir1.2-soup-3.0": {
+      "debian_name": "gir1.2-soup-3.0",
+      "arch_name": "libsoup3",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "gir1.2-notify-0.7": {
+      "debian_name": "gir1.2-notify-0.7",
+      "arch_name": "libnotify",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "libreoffice-core": {
+      "debian_name": "libreoffice-core",
+      "arch_name": "libreoffice-fresh",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libreoffice-writer": {
+      "debian_name": "libreoffice-writer",
+      "arch_name": "libreoffice-fresh",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libreoffice-calc": {
+      "debian_name": "libreoffice-calc",
+      "arch_name": "libreoffice-fresh",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libreoffice-impress": {
+      "debian_name": "libreoffice-impress",
+      "arch_name": "libreoffice-fresh",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libreoffice-draw": {
+      "debian_name": "libreoffice-draw",
+      "arch_name": "libreoffice-fresh",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libreoffice-base-core": {
+      "debian_name": "libreoffice-base-core",
+      "arch_name": "libreoffice-fresh",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libreoffice-common": {
+      "debian_name": "libreoffice-common",
+      "arch_name": "libreoffice-fresh",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libreoffice-style-colibre": {
+      "debian_name": "libreoffice-style-colibre",
+      "arch_name": "libreoffice-fresh",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "uno-libs-private": {
+      "debian_name": "uno-libs-private",
+      "arch_name": "libreoffice-fresh",
+      "confidence": 0.7,
+      "source": "Builtin"
+    },
+    "chromium-browser": {
+      "debian_name": "chromium-browser",
+      "arch_name": "chromium",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "chromium": {
+      "debian_name": "chromium",
+      "arch_name": "chromium",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "firefox": {
+      "debian_name": "firefox",
+      "arch_name": "firefox",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "firefox-esr": {
+      "debian_name": "firefox-esr",
+      "arch_name": "firefox",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "thunderbird": {
+      "debian_name": "thunderbird",
+      "arch_name": "thunderbird",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "google-chrome-stable": {
+      "debian_name": "google-chrome-stable",
+      "arch_name": "google-chrome",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "docker.io": {
+      "debian_name": "docker.io",
+      "arch_name": "docker",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "docker-ce": {
+      "debian_name": "docker-ce",
+      "arch_name": "docker",
+      "confidence": 0.95,
+      "source": "Builtin"
+    },
+    "podman": {
+      "debian_name": "podman",
+      "arch_name": "podman",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "buildah": {
+      "debian_name": "buildah",
+      "arch_name": "buildah",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "skopeo": {
+      "debian_name": "skopeo",
+      "arch_name": "skopeo",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "containerd": {
+      "debian_name": "containerd",
+      "arch_name": "containerd",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "runc": {
+      "debian_name": "runc",
+      "arch_name": "runc",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "crun": {
+      "debian_name": "crun",
+      "arch_name": "crun",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "apparmor": {
+      "debian_name": "apparmor",
+      "arch_name": "apparmor",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "apparmor-utils": {
+      "debian_name": "apparmor-utils",
+      "arch_name": "apparmor",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "wpasupplicant": {
+      "debian_name": "wpasupplicant",
+      "arch_name": "wpa_supplicant",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "isc-dhcp-client": {
+      "debian_name": "isc-dhcp-client",
+      "arch_name": "dhclient",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "isc-dhcp-common": {
+      "debian_name": "isc-dhcp-common",
+      "arch_name": "dhclient",
+      "confidence": 0.85,
+      "source": "Builtin"
+    },
+    "avahi-daemon": {
+      "debian_name": "avahi-daemon",
+      "arch_name": "avahi",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libavahi-client3": {
+      "debian_name": "libavahi-client3",
+      "arch_name": "avahi",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libavahi-common3": {
+      "debian_name": "libavahi-common3",
+      "arch_name": "avahi",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "openvpn": {
+      "debian_name": "openvpn",
+      "arch_name": "openvpn",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "wireguard": {
+      "debian_name": "wireguard",
+      "arch_name": "wireguard-tools",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "wireguard-tools": {
+      "debian_name": "wireguard-tools",
+      "arch_name": "wireguard-tools",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "iptables": {
+      "debian_name": "iptables",
+      "arch_name": "iptables",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "nftables": {
+      "debian_name": "nftables",
+      "arch_name": "nftables",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "ebtables": {
+      "debian_name": "ebtables",
+      "arch_name": "ebtables",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "cronie": {
+      "debian_name": "cronie",
+      "arch_name": "cronie",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "rsyslog": {
+      "debian_name": "rsyslog",
+      "arch_name": "rsyslog",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "anacron": {
+      "debian_name": "anacron",
+      "arch_name": "cronie",
+      "confidence": 0.7,
+      "source": "Builtin"
+    },
+    "at": {
+      "debian_name": "at",
+      "arch_name": "at",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "bc": {
+      "debian_name": "bc",
+      "arch_name": "bc",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "ed": {
+      "debian_name": "ed",
+      "arch_name": "ed",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "htop": {
+      "debian_name": "htop",
+      "arch_name": "htop",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "btop": {
+      "debian_name": "btop",
+      "arch_name": "btop",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "neofetch": {
+      "debian_name": "neofetch",
+      "arch_name": "neofetch",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "tmux": {
+      "debian_name": "tmux",
+      "arch_name": "tmux",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "screen": {
+      "debian_name": "screen",
+      "arch_name": "screen",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "vim": {
+      "debian_name": "vim",
+      "arch_name": "vim",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "vim-tiny": {
+      "debian_name": "vim-tiny",
+      "arch_name": "vim",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "nano": {
+      "debian_name": "nano",
+      "arch_name": "nano",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "emacs": {
+      "debian_name": "emacs",
+      "arch_name": "emacs",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "emacs-nox": {
+      "debian_name": "emacs-nox",
+      "arch_name": "emacs-nox",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libuv1": {
+      "debian_name": "libuv1",
+      "arch_name": "libuv",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libevent-2.1-7": {
+      "debian_name": "libevent-2.1-7",
+      "arch_name": "libevent",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libyaml-cpp0.7": {
+      "debian_name": "libyaml-cpp0.7",
+      "arch_name": "yaml-cpp",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libprotobuf32": {
+      "debian_name": "libprotobuf32",
+      "arch_name": "protobuf",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libgrpc++1": {
+      "debian_name": "libgrpc++1",
+      "arch_name": "grpc",
+      "confidence": 0.8,
+      "source": "Builtin"
+    },
+    "libabsl20220623": {
+      "debian_name": "libabsl20220623",
+      "arch_name": "abseil-cpp",
+      "confidence": 0.7,
+      "source": "Builtin"
+    },
+    "libnotify-bin": {
+      "debian_name": "libnotify-bin",
+      "arch_name": "libnotify",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libsecret-common": {
+      "debian_name": "libsecret-common",
+      "arch_name": "libsecret",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "libepoxy0": {
+      "debian_name": "libepoxy0",
+      "arch_name": "libepoxy",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libglvnd0": {
+      "debian_name": "libglvnd0",
+      "arch_name": "libglvnd",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libde265-0": {
+      "debian_name": "libde265-0",
+      "arch_name": "libde265",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "libgmp-dev": {
+      "debian_name": "libgmp-dev",
+      "arch_name": "gmp",
+      "confidence": 0.9,
+      "source": "Builtin"
+    },
+    "flatpak": {
+      "debian_name": "flatpak",
+      "arch_name": "flatpak",
+      "confidence": 1.0,
+      "source": "Builtin"
+    },
+    "snapd": {
+      "debian_name": "snapd",
+      "arch_name": "snapd",
+      "confidence": 1.0,
+      "source": "Builtin"
+    }
+  }
+}

@@ -67,6 +67,15 @@ impl DebParser {
         self.data_dir.as_path()
     }
 
+    /// Returns a reference to the underlying temporary directory.
+    ///
+    /// The `TempDir` owns the extraction directory on disk and is kept alive for the
+    /// lifetime of the parser. This accessor ensures the `temp_dir` field is read
+    /// and allows callers to inspect or manage the temporary directory if needed.
+    pub fn temp_dir(&self) -> &TempDir {
+        &self.temp_dir
+    }
+
     /// Extract the .deb archive
     fn extract_archive(&mut self) -> Result<()> {
         let file = File::open(&self.path)?;
@@ -107,10 +116,8 @@ impl DebParser {
             let mut archive = Archive::new(decoder);
             archive.unpack(dest)?;
         } else if name.ends_with(".bz2") {
-            // bz2 is less common but still supported
-            let mut data = Vec::new();
-            reader.read_to_end(&mut data)?;
-            let decoder = bzip2::read::BzDecoder::new(&data[..]);
+            // Stream directly without buffering the entire archive in memory (important for 2GB RAM)
+            let decoder = bzip2::read::BzDecoder::new(reader);
             let mut archive = Archive::new(decoder);
             archive.unpack(dest)?;
         } else {

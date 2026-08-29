@@ -345,6 +345,11 @@ impl PackageMetadata {
         lines.push(format!("arch = {}", self.arch.to_arch_name()));
         lines.push(format!("license = {}", self.license.to_pkgbuild()));
 
+        // Watermark: identifies this package as converted by rexeb even when rexeb is not installed
+        lines.push(format!("x-rexeb = {}", crate::VERSION));
+        // Store original deb name for provenance; use effective_name's source as fallback
+        lines.push(format!("x-rexeb-source = {}", self.name));
+
         // Dependencies
         for dep in self.get_deps(DependencyType::Depends) {
             lines.push(format!("depend = {}", dep.to_arch_string()));
