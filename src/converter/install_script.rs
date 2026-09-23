@@ -245,12 +245,12 @@ impl<'a> InstallScriptGenerator<'a> {
         let mut lines: Vec<&str> = script.lines().collect();
         
         // Remove trailing empty lines
-        while lines.last().map_or(false, |l| l.trim().is_empty()) {
+        while lines.last().is_some_and(|l| l.trim().is_empty()) {
             lines.pop();
         }
 
         // Remove leading empty lines
-        while lines.first().map_or(false, |l| l.trim().is_empty()) {
+        while lines.first().is_some_and(|l| l.trim().is_empty()) {
             lines.remove(0);
         }
 

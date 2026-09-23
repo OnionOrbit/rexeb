@@ -224,7 +224,7 @@ impl AurClient {
         // This filtering happens client-side since RPC search is broad
         results.retain(|pkg| {
             pkg.name == capability || 
-            pkg.provides.as_ref().map_or(false, |p| p.iter().any(|prov| prov == capability))
+            pkg.provides.as_ref().is_some_and(|p| p.iter().any(|prov| prov == capability))
         });
         
         // Sort by popularity

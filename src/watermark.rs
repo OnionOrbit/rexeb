@@ -157,24 +157,22 @@ pub fn list_installed() -> Result<Vec<InstalledRexebPackage>> {
     // Also scan doc sentinels for packages not in local DB (edge case)
     let doc_base = Path::new("/usr/share/doc");
     if doc_base.exists() {
-        for entry in std::fs::read_dir(doc_base).into_iter().flatten() {
-            if let Ok(e) = entry {
-                let doc_path = e.path().join(".rexeb.json");
-                if doc_path.exists() {
-                    // Only add if not already found via pacman DB
-                    let doc_pkg = e.file_name().to_string_lossy().to_string();
-                    if !result.iter().any(|p| p.name == doc_pkg) {
-                        let watermark: Option<Watermark> = std::fs::read_to_string(&doc_path)
-                            .ok()
-                            .and_then(|c| serde_json::from_str(&c).ok());
-                        result.push(InstalledRexebPackage {
-                            name: doc_pkg.clone(),
-                            version: watermark.as_ref().map(|w| w.full_version.clone()).unwrap_or_default(),
-                            detection: DetectionMethod::DocSentinel,
-                            watermark,
-                            db_path: doc_path,
-                        });
-                    }
+        for e in std::fs::read_dir(doc_base).into_iter().flatten().flatten() {
+            let doc_path = e.path().join(".rexeb.json");
+            if doc_path.exists() {
+                // Only add if not already found via pacman DB
+                let doc_pkg = e.file_name().to_string_lossy().to_string();
+                if !result.iter().any(|p| p.name == doc_pkg) {
+                    let watermark: Option<Watermark> = std::fs::read_to_string(&doc_path)
+                        .ok()
+                        .and_then(|c| serde_json::from_str(&c).ok());
+                    result.push(InstalledRexebPackage {
+                        name: doc_pkg.clone(),
+                        version: watermark.as_ref().map(|w| w.full_version.clone()).unwrap_or_default(),
+                        detection: DetectionMethod::DocSentinel,
+                        watermark,
+                        db_path: doc_path,
+                    });
                 }
             }
         }

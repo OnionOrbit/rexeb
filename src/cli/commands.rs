@@ -308,10 +308,9 @@ async fn convert_single_package(
         // Computed before `metadata` moves into the isolated manifest
         let expected = output_dir.join(PackageConverter::package_file_name(&metadata, format));
 
-        let output_path;
-        if isolated {
+        let output_path = if isolated {
             pb.set_message("Building isolated (bubblewrap)...");
-            output_path = crate::sandbox::run_isolated_build(crate::sandbox::IsolatedBuild {
+            crate::sandbox::run_isolated_build(crate::sandbox::IsolatedBuild {
                 metadata,
                 host_data_dir: parser.extract_dir().to_path_buf(),
                 output_path: expected,
@@ -320,7 +319,7 @@ async fn convert_single_package(
                 strip_binaries: strip,
                 source_file: Some(source_name),
                 keep_temp,
-            })?;
+            })?
         } else {
             let mut converter = PackageConverter::new(metadata, parser.extract_dir())?
                 .with_overwrite(args.force)
@@ -338,8 +337,8 @@ async fn convert_single_package(
                 pb.set_message("Building in sandbox...");
             }
 
-            output_path = converter.build(output_dir, format)?;
-        }
+            converter.build(output_dir, format)?
+        };
 
         if args.sign || args.sign_key.is_some() {
             let sig = sign_package(&output_path, args.sign_key.as_deref())?;
@@ -846,7 +845,7 @@ pub async fn execute_install(args: &super::InstallArgs, quiet: bool) -> Result<(
         .filter(|p| {
             p.file_name()
                 .and_then(|n| n.to_str())
-                .map_or(false, |n| n.contains(".pkg.tar."))
+                .is_some_and(|n| n.contains(".pkg.tar."))
         })
         .collect();
 
@@ -999,7 +998,7 @@ pub async fn execute_clean(args: &super::CleanArgs) -> Result<()> {
                 if entry
                     .file_name()
                     .to_str()
-                    .map_or(false, |n| n.starts_with("rexeb-"))
+                    .is_some_and(|n| n.starts_with("rexeb-"))
                 {
                     candidates.push(entry.path());
                 }
@@ -1231,7 +1230,7 @@ pub async fn execute_check_aur(args: &super::CheckAurArgs) -> Result<()> {
         let stem = p
             .file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or_else(|| query.as_str());
+            .unwrap_or(query.as_str());
         crate::parsers::appimage::split_appimage_filename(stem).0
     } else if p.exists() {
         match crate::parsers::detect_and_create(p) {
@@ -1414,7 +1413,10 @@ pub async fn execute_aur_push(args: &super::AurPushArgs) -> Result<()> {
         }
     }
 
-    println!("{} Published '{}' to AUR. Users can now run: {} or {}", style("Success:").green(), pkgbase, format!("paru -S {}", pkgbase), format!("yay -S {}", pkgbase));
+    println!(
+        "{} Published '{pkgbase}' to AUR. Users can now run: paru -S {pkgbase} or yay -S {pkgbase}",
+        style("Success:").green()
+    );
     Ok(())
 }
 

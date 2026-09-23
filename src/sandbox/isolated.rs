@@ -145,7 +145,7 @@ pub fn run_isolated_build(req: IsolatedBuild) -> Result<PathBuf> {
         if path
             .file_name()
             .and_then(|n| n.to_str())
-            .map_or(false, |n| n.contains(".pkg.tar."))
+            .is_some_and(|n| n.contains(".pkg.tar."))
         {
             artifact = Some(path);
             break;

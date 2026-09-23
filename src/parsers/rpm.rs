@@ -404,12 +404,7 @@ impl RpmParser {
         }
         meta.url = self.header.string(TAG_URL);
         meta.maintainer = self.header.string(TAG_PACKAGER);
-        meta.license = License::from_str(
-            &self
-                .header
-                .string(TAG_LICENSE)
-                .unwrap_or_default(),
-        );
+        meta.license = License::parse_license(&self.header.string(TAG_LICENSE).unwrap_or_default());
         meta.installed_size = self.installed_size;
         meta.files = self.files.clone();
 
