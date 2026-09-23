@@ -423,10 +423,7 @@ fn prompt_java_choice(
         .items(&["JDK (recommended, includes a runtime)", "JRE"])
         .default(0)
         .interact_opt();
-    match choice {
-        Ok(Some(1)) => false,
-        _ => true,
-    }
+    !matches!(choice, Ok(Some(1)))
 }
 
 #[cfg(test)]

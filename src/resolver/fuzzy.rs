@@ -45,10 +45,10 @@ impl FuzzyMatcher {
         for candidate in candidates {
             let score = self.calculate_score(debian_name, candidate);
             
-            if score >= self.min_score {
-                if best_match.as_ref().map_or(true, |(_, s)| score > *s) {
-                    best_match = Some((candidate.to_string(), score));
-                }
+            if score >= self.min_score
+                && best_match.as_ref().map_or(true, |(_, s)| score > *s)
+            {
+                best_match = Some((candidate.to_string(), score));
             }
         }
 
@@ -129,7 +129,7 @@ impl FuzzyMatcher {
 
         // Remove version numbers at the end (e.g., libfoo6 -> libfoo)
         let mut chars: Vec<char> = normalized.chars().collect();
-        while chars.last().map_or(false, |c| c.is_ascii_digit()) {
+        while chars.last().is_some_and(|c| c.is_ascii_digit()) {
             chars.pop();
         }
         normalized = chars.into_iter().collect();
@@ -172,7 +172,7 @@ impl FuzzyMatcher {
         // lib*N -> lib* (remove version number)
         if name.starts_with("lib") {
             let mut stripped = name.clone();
-            while stripped.chars().last().map_or(false, |c| c.is_ascii_digit()) {
+            while stripped.chars().last().is_some_and(|c| c.is_ascii_digit()) {
                 stripped.pop();
             }
             if stripped != name && stripped.len() > 3 {

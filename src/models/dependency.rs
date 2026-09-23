@@ -167,7 +167,7 @@ impl Dependency {
         if let Some(pos) = v.rfind('-') {
             let suffix = &v[pos + 1..];
             // Check if it looks like a Debian revision
-            if suffix.chars().next().map_or(false, |c| c.is_ascii_digit()) ||
+            if suffix.chars().next().is_some_and(|c| c.is_ascii_digit()) ||
                suffix.contains("ubuntu") || suffix.contains("debian") ||
                suffix.contains("build") || suffix.contains("deb")
             {

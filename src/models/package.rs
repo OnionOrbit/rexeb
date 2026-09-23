@@ -129,8 +129,11 @@ pub enum License {
 }
 
 impl License {
-    /// Parse license from string
-    pub fn from_str(s: &str) -> Self {
+    /// Parse a license from its SPDX-ish string form
+    ///
+    /// Never fails: unrecognised values become [`License::Custom`], and an
+    /// empty string becomes [`License::Unknown`].
+    pub fn parse_license(s: &str) -> Self {
         let s_lower = s.to_lowercase();
         
         if s_lower.contains("gpl-3") || s_lower.contains("gplv3") || s_lower.contains("gpl3") {

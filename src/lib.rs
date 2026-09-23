@@ -79,7 +79,7 @@ pub fn effective_parallel_jobs(explicit: Option<usize>) -> usize {
         2.min(cores)
     } else {
         // Cap to half cores on low-end, leave headroom for the system
-        (cores / 2).max(2).min(4)
+        (cores / 2).clamp(2, 4)
     }
 }
 

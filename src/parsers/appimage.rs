@@ -618,7 +618,7 @@ pub fn split_appimage_filename(stem: &str) -> (String, Option<String>) {
 
     let mut version_idx = None;
     for (i, part) in parts.iter().enumerate() {
-        if part.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+        if part.chars().next().is_some_and(|c| c.is_ascii_digit()) {
             version_idx = Some(i);
             break;
         }

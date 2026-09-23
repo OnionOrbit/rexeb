@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{RexebError, Result};
 
 /// Application configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     /// General settings
     #[serde(default)]
@@ -30,7 +30,7 @@ pub struct Config {
 }
 
 /// General configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GeneralConfig {
     /// Cache directory
     pub cache_dir: Option<PathBuf>,
@@ -103,18 +103,6 @@ pub struct JavaConfig {
     pub default_version: String,
 }
 
-impl Default for GeneralConfig {
-    fn default() -> Self {
-        Self {
-            cache_dir: None,
-            data_dir: None,
-            output_dir: None,
-            jobs: None,
-            auto_yes: false,
-        }
-    }
-}
-
 impl Default for ConversionConfig {
     fn default() -> Self {
         Self {
@@ -158,18 +146,6 @@ impl Default for JavaConfig {
             conflict_strategy: "prefer-jdk".to_string(),
             add_java_conflicts: true,
             default_version: "latest".to_string(),
-        }
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            general: GeneralConfig::default(),
-            conversion: ConversionConfig::default(),
-            network: NetworkConfig::default(),
-            logging: LoggingConfig::default(),
-            java: JavaConfig::default(),
         }
     }
 }

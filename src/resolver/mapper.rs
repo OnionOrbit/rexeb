@@ -160,11 +160,11 @@ impl PackageMapper {
         }
 
         // Strip lib prefix and version suffix
-        if name_lower.starts_with("lib") {
-            let mut base = name_lower[3..].to_string();
+        if let Some(stripped) = name_lower.strip_prefix("lib") {
+            let mut base = stripped.to_string();
             
             // Remove trailing numbers
-            while base.chars().last().map_or(false, |c| c.is_ascii_digit()) {
+            while base.chars().last().is_some_and(|c| c.is_ascii_digit()) {
                 base.pop();
             }
             
