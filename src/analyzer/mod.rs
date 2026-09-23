@@ -363,12 +363,12 @@ impl<'a> PackageAnalyzer<'a> {
 
     /// Verify file integrity using md5sums
     fn verify_files(&self, report: &mut AnalysisReport) -> Result<()> {
-        use md5::Context;
+        use md5::{Digest, Md5};
         use std::io::Read;
 
         for (path, expected_md5) in &self.metadata.md5sums {
             let full_path = self.data_dir.join(path.strip_prefix("/").unwrap_or(path));
-            
+
             if !full_path.exists() {
                 report.failed_files += 1;
                 report.warnings.push(format!("Missing file: {}", path.display()));
@@ -376,35 +376,45 @@ impl<'a> PackageAnalyzer<'a> {
             }
 
             // Calculate MD5 hash
-            if let Ok(mut file) = std::fs::File::open(&full_path) {
-                let mut context = Context::new();
-                let mut buffer = [0u8; 8192];
-                
-                loop {
-                    match file.read(&mut buffer) {
-                        Ok(0) => break,
-                        Ok(n) => context.consume(&buffer[..n]),
-                        Err(_) => {
-                            report.failed_files += 1;
-                            break;
-                        }
+            let mut file = match std::fs::File::open(&full_path) {
+                Ok(file) => file,
+                Err(_) => {
+                    report.failed_files += 1;
+                    continue;
+                }
+            };
+
+            let mut hasher = Md5::new();
+            let mut buffer = [0u8; 8192];
+            let mut read_error = false;
+
+            loop {
+                match file.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(n) => hasher.update(&buffer[..n]),
+                    Err(_) => {
+                        read_error = true;
+                        break;
                     }
                 }
+            }
 
-                let hash = hex::encode(context.compute().0);
-                if hash == *expected_md5 {
-                    report.verified_files += 1;
-                } else {
-                    report.failed_files += 1;
-                    report.warnings.push(format!(
-                        "Hash mismatch for {}: expected {}, got {}",
-                        path.display(),
-                        expected_md5,
-                        hash
-                    ));
-                }
+            if read_error {
+                report.failed_files += 1;
+                continue;
+            }
+
+            let hash = hex::encode(hasher.finalize());
+            if hash == *expected_md5 {
+                report.verified_files += 1;
             } else {
                 report.failed_files += 1;
+                report.warnings.push(format!(
+                    "Hash mismatch for {}: expected {}, got {}",
+                    path.display(),
+                    expected_md5,
+                    hash
+                ));
             }
         }
 
