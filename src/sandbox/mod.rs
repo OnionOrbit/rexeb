@@ -1,7 +1,9 @@
 //! Sandbox environment for package testing and building
 
+pub mod isolated;
 mod nspawn;
 
+pub use isolated::{bwrap_available, run_isolated_build, IsolatedBuild, SandboxManifest};
 pub use nspawn::NspawnSandbox;
 
 use std::path::Path;

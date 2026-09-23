@@ -1,6 +1,7 @@
 //! Command-line interface for rexeb
 
 mod commands;
+pub mod interactive;
 
 pub use commands::*;
 
@@ -8,9 +9,9 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// Rexeb - A smarter, faster debtap alternative
-/// 
-/// Convert .deb packages to Arch Linux packages with intelligent
-/// dependency resolution and advanced features.
+///
+/// Convert .deb and .rpm packages (or integrate AppImages) into Arch Linux
+/// packages with intelligent dependency resolution and advanced features.
 #[derive(Parser, Debug)]
 #[command(name = "rexeb")]
 #[command(author, version, about, long_about = None)]
@@ -85,13 +86,22 @@ pub enum Commands {
 
     /// Check for rexeb updates on GitHub
     SelfUpdate(SelfUpdateArgs),
+
+    /// Print shell completions to stdout
+    Completions(CompletionsArgs),
+
+    /// Print (or write) the rexeb man page
+    Manpage(ManpageArgs),
+
+    /// Build a package from a sandbox manifest (internal: re-exec target)
+    #[command(name = "__sandbox-build", hide = true)]
+    SandboxBuild(SandboxBuildArgs),
 }
 
 /// Arguments for the convert command
 #[derive(Parser, Debug, Clone)]
 pub struct ConvertArgs {
-    /// Input package file(s)
-    #[arg(required = true)]
+    /// Input package file(s): .deb, .rpm, .AppImage (empty starts an interactive picker on a TTY)
     pub input: Vec<PathBuf>,
 
     /// Output directory (default: current directory)
@@ -114,7 +124,23 @@ pub struct ConvertArgs {
     #[arg(short = 'y', long)]
     pub yes: bool,
 
-    /// Treat package as 64-bit (pseudo-64-bit mode)
+    /// Interactive mode: picker, dependency review and confirmations
+    #[arg(short = 'i', long)]
+    pub interactive: bool,
+
+    /// Show the conversion plan without writing anything
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Detach-sign the built package with GPG (uses the default key)
+    #[arg(long)]
+    pub sign: bool,
+
+    /// Detach-sign with a specific GPG key id (implies --sign)
+    #[arg(long)]
+    pub sign_key: Option<String>,
+
+    /// Treat package as 64-bit (experimental: only affects i386 packages)
     #[arg(short = 'P', long)]
     pub pseudo64: bool,
 
@@ -122,9 +148,13 @@ pub struct ConvertArgs {
     #[arg(long)]
     pub keep_temp: bool,
 
-    /// Build inside a systemd-nspawn sandbox
+    /// Build inside a sandbox (see --sandbox-backend)
     #[arg(long)]
     pub sandbox: bool,
+
+    /// Sandbox backend: bubblewrap isolates the build, nspawn only stages files
+    #[arg(long, value_enum)]
+    pub sandbox_backend: Option<SandboxBackendArg>,
 
     /// Custom package name override
     #[arg(long)]
@@ -138,19 +168,33 @@ pub struct ConvertArgs {
     #[arg(long)]
     pub release: Option<String>,
 
-    /// Output format
-    #[arg(long, value_enum, default_value_t = OutputFormat::PkgTarZst)]
-    pub format: OutputFormat,
+    /// Output format (overrides `conversion.default_format` from the config)
+    #[arg(long, value_enum)]
+    pub format: Option<OutputFormat>,
+}
+
+/// Sandbox backend for `--sandbox`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum SandboxBackendArg {
+    /// Bubblewrap when available, else nspawn staging
+    Auto,
+    /// Bubblewrap: the build runs fully isolated (rootless)
+    Bwrap,
+    /// systemd-nspawn: files are staged through a container (needs root)
+    Nspawn,
 }
 
 /// Output format for converted packages
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize, serde::Deserialize)]
 pub enum OutputFormat {
     /// .pkg.tar.zst (default, recommended)
+    #[value(name = "pkg.tar.zst", alias = "pkg-tar-zst", alias = "zst")]
     PkgTarZst,
     /// .pkg.tar.xz (legacy format)
+    #[value(name = "pkg.tar.xz", alias = "pkg-tar-xz", alias = "xz")]
     PkgTarXz,
     /// .pkg.tar.gz (for compatibility)
+    #[value(name = "pkg.tar.gz", alias = "pkg-tar-gz", alias = "gz")]
     PkgTarGz,
 }
 
@@ -161,6 +205,16 @@ impl OutputFormat {
             Self::PkgTarZst => "pkg.tar.zst",
             Self::PkgTarXz => "pkg.tar.xz",
             Self::PkgTarGz => "pkg.tar.gz",
+        }
+    }
+
+    /// Parse a format name from config (`pkg.tar.zst`, `pkg-tar-xz`, `gz`, ...)
+    pub fn from_config_str(s: &str) -> Option<Self> {
+        match s.trim().to_lowercase().as_str() {
+            "pkg.tar.zst" | "pkg-tar-zst" | "zst" => Some(Self::PkgTarZst),
+            "pkg.tar.xz" | "pkg-tar-xz" | "xz" => Some(Self::PkgTarXz),
+            "pkg.tar.gz" | "pkg-tar-gz" | "gz" => Some(Self::PkgTarGz),
+            _ => None,
         }
     }
 }
@@ -326,6 +380,9 @@ pub enum ConfigCommands {
         /// Force overwrite existing config
         #[arg(short, long)]
         force: bool,
+        /// Ask for the main settings instead of writing plain defaults
+        #[arg(short = 'i', long)]
+        interactive: bool,
     },
 }
 
@@ -360,12 +417,12 @@ pub struct MapArgs {
 /// Map subcommands
 #[derive(Subcommand, Debug)]
 pub enum MapCommands {
-    /// Add a manual mapping
+    /// Add a manual mapping (missing values are prompted on a TTY)
     Add {
         /// Debian package name
-        debian: String,
+        debian: Option<String>,
         /// Arch package name
-        arch: String,
+        arch: Option<String>,
         /// Confidence (0.0 - 1.0)
         #[arg(long, default_value = "1.0")]
         confidence: f32,
@@ -396,7 +453,7 @@ pub enum MapCommands {
 /// Arguments for the check-aur command
 #[derive(Parser, Debug)]
 pub struct CheckAurArgs {
-    /// Package file (.deb) or package name to check
+    /// Package file (.deb, .rpm, .AppImage) or package name to check
     pub package: Option<String>,
     /// Check all rexeb-installed packages
     #[arg(long)]
@@ -406,7 +463,7 @@ pub struct CheckAurArgs {
 /// Arguments for the aur-push command
 #[derive(Parser, Debug)]
 pub struct AurPushArgs {
-    /// Converted package directory (containing PKGBUILD) or .deb file
+    /// Converted package directory (containing PKGBUILD) or package file
     pub input: PathBuf,
     /// AUR package base name (defaults to PKGBUILD pkgname)
     #[arg(long)]
@@ -449,6 +506,62 @@ pub struct SelfUpdateArgs {
     /// Force apply even if not needed
     #[arg(long)]
     pub force: bool,
+}
+
+/// Arguments for the completions command
+#[derive(Parser, Debug)]
+pub struct CompletionsArgs {
+    /// Shell to generate completions for
+    #[arg(value_enum)]
+    pub shell: CompletionShell,
+}
+
+/// Shells supported by the `completions` command
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CompletionShell {
+    /// Bourne-again shell
+    Bash,
+    /// Elvish shell
+    Elvish,
+    /// Friendly interactive shell
+    Fish,
+    /// PowerShell
+    #[value(name = "powershell")]
+    PowerShell,
+    /// Z shell
+    Zsh,
+}
+
+impl CompletionShell {
+    /// Convert to the `clap_complete` generator
+    pub fn to_generator(self) -> clap_complete::Shell {
+        match self {
+            Self::Bash => clap_complete::Shell::Bash,
+            Self::Elvish => clap_complete::Shell::Elvish,
+            Self::Fish => clap_complete::Shell::Fish,
+            Self::PowerShell => clap_complete::Shell::PowerShell,
+            Self::Zsh => clap_complete::Shell::Zsh,
+        }
+    }
+}
+
+/// Arguments for the manpage command
+#[derive(Parser, Debug)]
+pub struct ManpageArgs {
+    /// Write to this file instead of stdout
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+}
+
+/// Arguments for the hidden sandbox-build command
+#[derive(Parser, Debug)]
+pub struct SandboxBuildArgs {
+    /// Path to the JSON build manifest
+    #[arg(long)]
+    pub manifest: PathBuf,
+    /// Directory to write the built package into
+    #[arg(long)]
+    pub out_dir: PathBuf,
 }
 
 impl Cli {

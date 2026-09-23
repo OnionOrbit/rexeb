@@ -1,4 +1,4 @@
-# Rexeb `v0.2.4-alpha`
+# Rexeb `v0.3.0-alpha`
 
 ```
   ██████╗ ███████╗██╗  ██╗███████╗██████╗
@@ -9,16 +9,16 @@
   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚═════╝
 ```
 
-*A smarter, faster debtap alternative — convert .deb packages to Arch Linux packages*
+*A smarter, faster debtap alternative — convert .deb and .rpm packages (or integrate AppImages) into Arch Linux packages*
 
-[![License: GPL-v3.0](https://img.shields/-badge/License-GPL--3.0-yellow.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License: GPL-v3.0](https://img.shields.io/badge/License-GPL--3.0-yellow.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.2.4--alpha-blue.svg)](https://github.com/OnionOrbit/rexeb/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0--alpha-blue.svg)](https://github.com/OnionOrbit/rexeb/releases)
 [![Mappings](https://img.shields.io/badge/mappings-589-green.svg)](#dependency-database)
 
 ## About
 
-Rexeb is a modern, high-performance CLI written in Rust that converts Debian (`.deb`) packages to Arch Linux packages (`.pkg.tar.zst`). It's a faster, more reliable alternative to debtap — with intelligent dependency mapping, AUR-assisted fallback, parallel processing, watermark tracking, and AUR publishing. Built for real hardware: great performance on dual-core / i3 / i5 and 2 GB RAM with low-RAM safety caps.
+Rexeb is a modern, high-performance CLI written in Rust that converts Debian (`.deb`) and RPM (`.rpm`) packages — or integrates AppImages — into Arch Linux packages (`.pkg.tar.zst`). It's a faster, more reliable alternative to debtap — with intelligent dependency mapping, AUR-assisted fallback, parallel processing, watermark tracking, and AUR publishing. Built for real hardware: great performance on dual-core / i3 / i5 and 2 GB RAM with low-RAM safety caps.
 
 ## Features
 
@@ -26,10 +26,12 @@ Rexeb is a modern, high-performance CLI written in Rust that converts Debian (`.
 - 🔍 **Smart dependency resolution** — 589-entry curated mapping, regex rewrites, fuzzy matching (skim + Jaro-Winkler), and AUR provider search as fallback
 - 🗺️ **Manual mapping** — `rexeb map add/remove/import/export` to fix any missing dependency without recompiling
 - 🔄 **Database sync** — `rexeb update` pulls from `db/mappings.json`; `--enlarge` crawls local pacman DB `Provides` + debtap's mapping table
-- 📦 **Batch processing** — convert multiple `.deb` files in one invocation
+- 📦 **Batch processing** — convert multiple `.deb`/`.rpm`/`.AppImage` files in one invocation
+- 🎩 **RPM support** — binary RPMs convert with RPM-aware dependency mapping (soname/file/exact-name resolution, scriptlet hooks)
+- 📲 **AppImage integration** — AppImages install cleanly to `/opt/<name>` with desktop entry + icon, zero dependencies
 - 🔧 **Flexible configuration** — TOML config, `--name`/`--version` overrides, `--format` (zst/xz/gz)
 - 🏷️ **Packages renamed safely** — `--name` override + `rexeb manage --rename` alias
-- 🏗️ **Sandboxed builds** — `systemd-nspawn` isolation via `--sandbox`
+- 🏗️ **Sandboxed builds** — fully isolated bubblewrap builds via `--sandbox` (nspawn staging with `--sandbox-backend nspawn`)
 - 📊 **Analysis** — pre-conversion warnings, FHS/lib/security/conflict checks (`rexeb analyze`)
 - 🔎 **Search** — local + AUR package search
 - 🧪 **AUR integration** — `rexeb check-aur` for latest version checks, `rexeb aur-push` to publish conversions
@@ -71,11 +73,45 @@ paru -S rexeb      # or: yay -S rexeb
 
 ```bash
 rexeb convert package.deb
-rexeb convert package1.deb package2.deb -o ./out
+rexeb convert package.rpm                               # Fedora/RHEL/openSUSE packages too
+rexeb convert app.AppImage                              # integrates the AppDir to /opt/<name>
+rexeb convert package1.deb package2.rpm -o ./out       # formats can mix freely
 rexeb convert --name my-pkg --format pkg.tar.xz package.deb
-rexeb convert --sandbox package.deb
+rexeb convert --sandbox package.deb                    # isolated build (bubblewrap)
+rexeb convert --sandbox --sandbox-backend nspawn pkg.deb  # nspawn staging instead
 rexeb convert --pkgbuild package.deb -o ./PKGBUILD-dir
+rexeb convert --dry-run package.deb                    # preview only, writes nothing
+rexeb convert --sign --sign-key DEADBEEF package.deb   # GPG detach-sign the result
 ```
+
+RPM dependencies use RPM semantics: `rpmlib(...)`/`config(...)`/`rtld(...)`/
+`group(...)`/`user(...)` markers are skipped, sonames (`libc.so.6`) and file
+paths (`/usr/bin/sh`) resolve against the local system (`ldconfig` +
+`pacman -Qo`/`-F`), and plain names go through the standard pipeline with an
+exact repo match first. Install scriptlets (`%pre`/`%post`/`%preun`/`%postun`,
+except `<lua>`) become `.INSTALL` hooks; source RPMs (`.src.rpm`) are rejected
+with a clear error. Detection is by magic bytes, so renamed files still work.
+
+AppImages carry no dependencies (everything is bundled) and need no FUSE to
+integrate: rexeb runs `--appimage-extract`, installs the AppDir to
+`/opt/<name>/`, and rewrites the `.desktop` entry (`Exec=/opt/<name>/AppRun`)
+and icon into `/usr/share`. Name/version come from the `.desktop` file when
+present, else from the filename (`Foo-1.2.3-x86_64.AppImage`).
+
+### Interactive mode
+
+On a terminal, `convert` guides you instead of failing or guessing silently:
+
+```bash
+rexeb convert                  # pick .deb/.rpm/.AppImage files from the cwd
+rexeb convert -i package.deb   # picker + dependency review + build confirmation
+```
+
+Unmapped dependencies trigger a review (type the Arch name, search the AUR,
+drop, or abort) and anything you teach rexeb is saved to the mapping
+database. `map add` with missing arguments and `config init --interactive`
+prompt the same way. Scripts are unaffected: prompts never appear under
+`--yes`, `--quiet`, `auto_yes`, or without a TTY.
 
 ### Install in one step
 
@@ -95,22 +131,35 @@ rexeb search libssl --fuzzy --aur
 
 | Command | Description |
 |---------|-------------|
-| `convert` | Convert `.deb` → `.pkg.tar.zst` (or PKGBUILD) |
+| `convert` | Convert `.deb`/`.rpm`/`.AppImage` → `.pkg.tar.zst` (or PKGBUILD) |
 | `install` | Convert and install via `pacman -U` |
 | `analyze` | Pre-conversion analysis (FHS, libs, security, conflicts, deps) |
 | `info` | Show package metadata |
 | `search` | Search Arch / AUR package mappings |
 | `update` | Refresh mappings, virtual packages, AUR cache (`--enlarge` crawls repo DBs + debtap) |
 | `map` | `add`/`remove`/`list`/`import`/`export` manual dependency mappings |
-| `check-aur` | Check AUR for latest version of a package or deb (`--installed` for all watermarked pkgs) |
+| `check-aur` | Check AUR for latest version of a package or package file (`--installed` for all watermarked pkgs) |
 | `aur-push` | Publish a converted PKGBUILD to the AUR (`--dry-run` to preview) |
 | `list-installed` | List packages previously installed by rexeb (watermark) |
 | `manage` | Rename (`--rename`) or fix icons (`--fix-icon`) of installed rexeb packages |
 | `self-update` | Check / apply updates from GitHub releases (`--check-only`) |
 | `config` | `show`/`edit`/`reset`/`set`/`get`/`init` configuration |
 | `clean` | Clean cache and temp files (parallel, `--dry-run`) |
+| `completions` | Print shell completions (`bash`, `zsh`, `fish`, …) |
+| `manpage` | Print (or `--output`) the man page |
 
 Global flags: `-v/--verbose`, `-q/--quiet`, `-c/--config`, `-j/--jobs`, `--tui`.
+
+### Configuration
+
+`rexeb config init` writes `~/.config/rexeb/config.toml` (override the path
+with `--config` / `REXEB_CONFIG`). Honored settings include output directory,
+default `--format`, `skip_deps`, `keep_temp`, `strip_binaries`,
+`min_match_confidence`, HTTP `timeout`/`proxy`, AUR URLs, `debtap_url`
+(pin to a commit for reproducible `update --enlarge` imports), `offline`
+mode, log `level`/`color`, and the Java `conflict_strategy` (`prefer-jdk`,
+`prefer-jre`, `jre`, `jdk`, `prompt`). Invalid values are rejected by
+`rexeb config set`.
 
 ```bash
 rexeb update --all --force --enlarge
@@ -136,7 +185,7 @@ debian => arch"` table, proposes new `{debian → arch}` entries at 0.75 confide
 Every package built by rexeb is stamped so it can be identified even when rexeb is not installed:
 
 - `.PKGINFO` fields: `x-rexeb`, `x-rexeb-source` (ignored by pacman/libalpm, visible via `pacman -Qi`)
-- `pakcman -Q` path + sentinel lookups in `src/watermark.rs` — `list-installed` scans `/var/lib/pacman/local/*/desc` for `x-rexeb`
+- `pacman -Q` path + sentinel lookups in `src/watermark.rs` — `list-installed` scans `/var/lib/pacman/local/*/desc` for `x-rexeb`
 
 ## Dependencies
 
@@ -161,6 +210,9 @@ cargo clippy -- -D warnings
 
 ## Changelog
 
+- **v0.3.0-alpha** — `.rpm` support (hand-rolled header + streaming cpio extraction, zero new dependencies; RPM-aware dep mapping with `rpmlib`/`config`/`rtld` skipping, soname/file resolution via `ldconfig` + `pacman -Qo`/`-F`, scriptlet → `.INSTALL` translation, `.src.rpm` rejection); AppImage integration (extract + stage to `/opt/<name>` with rewritten `.desktop`/icon, zero deps); magic-byte format detection (renamed files work); format-generalized `convert`/`info`/`analyze`/`check-aur`/`aur-push` and interactive picker; RPM/AppImage integration tests.
+- **Unreleased** — self-dependency fix (`depend = self` / `Breaks: self (<< x)` no longer break `pacman -U`; usable `a | b` alternatives are promoted; unmapped deps are dropped with warnings instead of emitted verbatim); interactive CLI (`convert` picker, unmapped-dependency review with AUR search, `--interactive` confirmations, `map add` + `config init --interactive` wizards); `--dry-run` conversion plans; `--sign`/`--sign-key` GPG detach-signing; real bubblewrap-isolated `--sandbox` builds with `--sandbox-backend auto|bwrap|nspawn`; `completions` + `manpage` commands; content-accurate `pkgbuild_sha256sum`; mapping DB format versioning; configurable `debtap_url`; offline mode skips AUR requests; integration tests with fixture `.deb`s.
+- **Unreleased (reliability pass)** — trim `ar` member names + reject `.deb`s missing control/data members; fix pacman `desc` parsing (`update --virtual-packages` / `--enlarge` actually harvest now); persist + reload Arch/virtual caches; fix `packages.gz` and `pacman -Ss` parsing; URL-encode + time out AUR requests; best-confidence dependency resolution with virtual-provider mapping and arch-qualifier filtering; Java `prompt` strategy; batch `analyze --conflicts`; per-package `--pkgbuild` dirs; bounded convert parallelism; `--force` overwrite protection; encoder finish/flush; symlink-correct `.MTREE`; `.rexeb.json` sentinel; working `map remove/list/import/export`; real `--fix-icon`; honest `--sandbox`/`self-update`; `--config`/`--jobs`/logging/proxy settings honored; `--format pkg.tar.xz` values accepted.
 - **v0.2.4-alpha** — bump version, mappings 497 → 589 (+92: KDE5, gir1.2-*, LibreOffice, browsers, containers, network, everyday tools); JSON-first DB with embedded fallback; `rexeb update` no longer 404s; 59 → 0 warnings; `map`/`check-aur`/`aur-push`/`list-installed`/`manage`/`self-update`/`--enlarge`; bzip2 streaming + low-RAM caps.
 - **v0.2.0-alpha** — initial public alpha.
 

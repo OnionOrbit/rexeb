@@ -46,6 +46,22 @@ impl VersionOp {
             _ => None,
         }
     }
+
+    /// Parse from RPM sense flags (`REQUIREFLAGS`/`CONFLICTFLAGS`/...)
+    ///
+    /// Only the comparison bits are honored (`LESS = 0x02`, `GREATER = 0x04`,
+    /// `EQUAL = 0x08`); script qualifiers and friends are ignored. Returns
+    /// `None` when no version comparison is requested.
+    pub fn from_rpm_flags(flags: u32) -> Option<Self> {
+        match flags & 0x0f {
+            0x08 => Some(Self::Eq),
+            0x02 => Some(Self::Lt),
+            0x04 => Some(Self::Gt),
+            0x0a => Some(Self::Le),
+            0x0c => Some(Self::Ge),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for VersionOp {
@@ -71,6 +87,8 @@ pub struct Dependency {
     pub is_virtual: bool,
     /// Confidence score for the mapping (0.0 - 1.0)
     pub confidence: f32,
+    /// Debian architecture qualifier (e.g. `amd64`, `!amd64`), if any
+    pub arch_qualifier: Option<String>,
 }
 
 impl Dependency {
@@ -84,6 +102,7 @@ impl Dependency {
             alternatives: Vec::new(),
             is_virtual: false,
             confidence: 0.0,
+            arch_qualifier: None,
         }
     }
 
@@ -97,6 +116,7 @@ impl Dependency {
             alternatives: Vec::new(),
             is_virtual: false,
             confidence: 0.0,
+            arch_qualifier: None,
         }
     }
 
@@ -185,6 +205,10 @@ impl Dependency {
             let name = caps.get(1).unwrap().as_str().to_string();
             let version_op = caps.get(2).and_then(|m| VersionOp::from_debian(m.as_str()));
             let version = caps.get(3).map(|m| m.as_str().trim().to_string());
+            let arch_qualifier = caps
+                .get(4)
+                .map(|m| m.as_str().trim().to_string())
+                .filter(|q| !q.is_empty());
 
             Ok(Self {
                 debian_name: name,
@@ -194,6 +218,7 @@ impl Dependency {
                 alternatives: Vec::new(),
                 is_virtual: false,
                 confidence: 0.0,
+                arch_qualifier,
             })
         } else {
             // Fallback: just treat the whole thing as a package name
@@ -218,6 +243,34 @@ impl Dependency {
         }
 
         Ok(primary)
+    }
+
+    /// Whether this dependency does not apply to the given Debian architecture
+    ///
+    /// Handles qualifiers like `[amd64]`, `[amd64 arm64]`, `[!amd64]`,
+    /// `[!amd64 !arm64]` and wildcards like `[linux-any]`.
+    pub fn is_excluded_on(&self, debian_arch: &str) -> bool {
+        let qualifier = match self.arch_qualifier {
+            Some(ref q) => q,
+            None => return false,
+        };
+        let tokens: Vec<&str> = qualifier.split_whitespace().collect();
+        if tokens.is_empty() {
+            return false;
+        }
+        let has_negative = tokens.iter().any(|t| t.starts_with('!'));
+        if has_negative {
+            // Excluded when the arch matches any negated entry
+            tokens
+                .iter()
+                .filter_map(|t| t.strip_prefix('!'))
+                .any(|a| arch_pattern_matches(a, debian_arch))
+        } else {
+            // Included only when the arch matches at least one entry
+            !tokens
+                .iter()
+                .any(|a| arch_pattern_matches(a, debian_arch))
+        }
     }
 
     /// Parse a comma-separated list of dependencies
@@ -301,6 +354,32 @@ impl DependencyType {
     }
 }
 
+/// Match an architecture qualifier pattern against a Debian architecture
+fn arch_pattern_matches(pattern: &str, arch: &str) -> bool {
+    if pattern == arch {
+        return true;
+    }
+    // Wildcards like `linux-any` or `any-amd64`
+    if let Some((os, rest)) = pattern.split_once('-') {
+        if rest == "any" {
+            return debian_arch_os(arch) == os;
+        }
+        if os == "any" {
+            return rest == arch;
+        }
+    }
+    false
+}
+
+/// Operating system part of a Debian architecture (for `linux-any` matching)
+fn debian_arch_os(arch: &str) -> &str {
+    match arch {
+        "amd64" | "i386" | "arm64" | "armhf" | "armel" | "ppc64el" | "s390x" | "riscv64"
+        | "mipsel" | "mips64el" | "powerpc" | "sparc64" => "linux",
+        _ => "unknown",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,5 +415,22 @@ mod tests {
         assert_eq!(deps[0].debian_name, "libc6");
         assert_eq!(deps[1].debian_name, "libssl1.1");
         assert_eq!(deps[2].debian_name, "zlib1g");
+    }
+
+    #[test]
+    fn test_parse_arch_qualifier() {
+        let dep = Dependency::parse("libfoo (>= 1.0) [amd64]").unwrap();
+        assert_eq!(dep.debian_name, "libfoo");
+        assert_eq!(dep.arch_qualifier.as_deref(), Some("amd64"));
+        assert!(!dep.is_excluded_on("amd64"));
+        assert!(dep.is_excluded_on("arm64"));
+
+        let neg = Dependency::parse("libbar [!amd64]").unwrap();
+        assert!(neg.is_excluded_on("amd64"));
+        assert!(!neg.is_excluded_on("arm64"));
+
+        let plain = Dependency::parse("libbaz").unwrap();
+        assert!(plain.arch_qualifier.is_none());
+        assert!(!plain.is_excluded_on("amd64"));
     }
 }

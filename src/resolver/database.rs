@@ -1,8 +1,15 @@
 //! Package database for Debian to Arch package mappings
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+
+/// On-disk format version of the user mapping overlay
+///
+/// Bump when the wrapped `{version, count, mappings, removed}` shape
+/// changes; loaders warn on newer versions instead of misreading them.
+/// (Version 0 = legacy flat `{debian: mapping}` files, still accepted.)
+pub const DB_FORMAT_VERSION: u32 = 1;
 
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +26,11 @@ pub struct PackageDatabase {
     arch_packages: HashMap<String, ArchPackageInfo>,
     /// AUR package cache
     aur_packages: HashMap<String, AurPackageInfo>,
+    /// Tombstoned mappings: Debian names the user removed via `rexeb map remove`
+    ///
+    /// Needed because embedded/dev mappings would otherwise resurface on
+    /// every load; persisted alongside the user overlay in `mappings.json`.
+    removed: HashSet<String>,
     /// Database directory
     db_dir: PathBuf,
 }
@@ -107,6 +119,7 @@ impl PackageDatabase {
             virtual_packages: HashMap::new(),
             arch_packages: HashMap::new(),
             aur_packages: HashMap::new(),
+            removed: HashSet::new(),
             db_dir,
         };
 
@@ -129,42 +142,44 @@ impl PackageDatabase {
     }
 
     /// Try loading mappings from bundled JSON files (compile-time fallback)
+    ///
+    /// Layering: dev checkout `db/mappings.json` (if present) over the
+    /// compile-time embedded copy. The user overlay in the data dir is
+    /// applied separately by `load_cached_data`.
     fn load_bundled_mappings(&mut self) -> bool {
-        // First try runtime data_dir (installed)
-        if let Ok(data_dir) = Self::get_db_dir() {
-            let bundled = data_dir.join("mappings.json");
-            // Also check relative db/ path for dev builds
-            let candidates = [
-                bundled,
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("db/mappings.json"),
-            ];
-            for path in &candidates {
-                if path.exists() {
-                    if let Ok(content) = std::fs::read_to_string(path) {
-                        if let Ok(wrapped) = serde_json::from_str::<serde_json::Value>(&content) {
-                            if let Some(inner) = wrapped.get("mappings") {
-                                if let Ok(m) = serde_json::from_value::<HashMap<String, PackageMapping>>(inner.clone()) {
-                                    let count = m.len();
-                                    self.mappings.extend(m);
-                                    tracing::debug!("Loaded {} mappings from {}", count, path.display());
-                                    // Also try virtual packages
-                                    self.load_bundled_virtuals();
-                                    return true;
-                                }
-                            }
+        // Dev-checkout overlay (only exists when running from a source tree)
+        let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("db/mappings.json");
+        if dev_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&dev_path) {
+                if let Ok(wrapped) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(inner) = wrapped.get("mappings") {
+                        if let Ok(m) =
+                            serde_json::from_value::<HashMap<String, PackageMapping>>(inner.clone())
+                        {
+                            let count = m.len();
+                            self.mappings.extend(m);
+                            tracing::debug!("Loaded {} mappings from {}", count, dev_path.display());
                         }
                     }
                 }
             }
         }
-        // Fallback to compile-time include
-        if let Ok(m) = Self::load_embedded_mappings() {
-            let count = m.len();
-            self.mappings.extend(m);
-            tracing::debug!("Loaded {} embedded mappings", count);
-            return true;
+        // Embedded copy (always available — a missing file is a compile error)
+        match Self::load_embedded_mappings() {
+            Ok(m) => {
+                let count = m.len();
+                // Dev overlay wins for duplicate keys
+                for (k, v) in m {
+                    self.mappings.entry(k).or_insert(v);
+                }
+                tracing::debug!("Loaded {} embedded mappings", count);
+                true
+            }
+            Err(e) => {
+                tracing::warn!("Embedded mappings unavailable: {}", e);
+                false
+            }
         }
-        false
     }
 
     /// Load embedded mappings compiled into the binary
@@ -178,32 +193,45 @@ impl PackageDatabase {
         }
     }
 
-    /// Load bundled virtual packages
+    /// Load bundled virtual packages (dev overlay + embedded copy)
     fn load_bundled_virtuals(&mut self) {
-        let candidates = [
-            Self::get_db_dir().ok().map(|d| d.join("virtual_packages.json")),
-            Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("db/virtual_packages.json")),
-        ];
-        for path in candidates.into_iter().flatten() {
-            if path.exists() {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    if let Ok(wrapped) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(vp) = wrapped.get("virtual_packages") {
-                            if let Ok(m) = serde_json::from_value::<HashMap<String, Vec<String>>>(vp.clone()) {
-                                for (k, v) in m {
-                                    self.virtual_packages.entry(k).or_default().extend(v);
-                                }
-                                return;
+        let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("db/virtual_packages.json");
+        if dev_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&dev_path) {
+                if let Ok(wrapped) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(vp) = wrapped.get("virtual_packages") {
+                        if let Ok(m) = serde_json::from_value::<HashMap<String, Vec<String>>>(vp.clone())
+                        {
+                            for (k, v) in m {
+                                self.virtual_packages.entry(k).or_default().extend(v);
                             }
                         }
                     }
                 }
             }
         }
+        if let Ok(m) = Self::load_embedded_virtuals() {
+            for (k, v) in m {
+                self.virtual_packages.entry(k).or_default().extend(v);
+            }
+        }
+    }
+
+    /// Load embedded virtual packages compiled into the binary
+    fn load_embedded_virtuals() -> Result<HashMap<String, Vec<String>>> {
+        let content = include_str!("../../db/virtual_packages.json");
+        let wrapped: serde_json::Value = serde_json::from_str(content)?;
+        if let Some(inner) = wrapped.get("virtual_packages") {
+            Ok(serde_json::from_value(inner.clone())?)
+        } else {
+            Ok(serde_json::from_str(content)?)
+        }
     }
 
     /// Load built-in package mappings
     fn load_builtin_mappings(&mut self) {
+        // Virtual packages always load (embedded copy is always available)
+        self.load_bundled_virtuals();
         // Try JSON first; if successful, skip hardcoded fallback
         if self.load_bundled_mappings() {
             return;
@@ -823,14 +851,24 @@ impl PackageDatabase {
         }
     }
 
-    /// Load cached database files
+    /// Load cached database files (user overlay)
     fn load_cached_data(&mut self) -> Result<()> {
         // Load custom mappings - handle both new wrapped format and legacy flat format
         let mappings_path = self.db_dir.join("mappings.json");
         if mappings_path.exists() {
             if let Ok(content) = std::fs::read_to_string(&mappings_path) {
-                // Try wrapped format first: {"mappings": {...}}
+                // Try wrapped format first: {"mappings": {...}, "removed": [...]}
                 if let Ok(wrapped) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(v) = wrapped.get("version").and_then(|v| v.as_u64()) {
+                        if v as u32 > DB_FORMAT_VERSION {
+                            tracing::warn!(
+                                "Mapping overlay {} uses format version {} (this rexeb supports {}); reading known keys only",
+                                mappings_path.display(),
+                                v,
+                                DB_FORMAT_VERSION
+                            );
+                        }
+                    }
                     if let Some(inner) = wrapped.get("mappings") {
                         if let Ok(m) = serde_json::from_value::<HashMap<String, PackageMapping>>(inner.clone()) {
                             self.mappings.extend(m);
@@ -838,6 +876,30 @@ impl PackageDatabase {
                     } else if let Ok(flat) = serde_json::from_str::<HashMap<String, PackageMapping>>(&content) {
                         // Legacy flat format
                         self.mappings.extend(flat);
+                    }
+                    // Tombstoned mappings win over every other layer
+                    if let Some(rem) = wrapped.get("removed") {
+                        if let Ok(list) = serde_json::from_value::<Vec<String>>(rem.clone()) {
+                            for r in list {
+                                self.removed.insert(r.clone());
+                                self.mappings.remove(&r);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Load virtual packages cache (written by update_virtual_packages)
+        let virtuals_path = self.db_dir.join("virtual_packages.json");
+        if virtuals_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&virtuals_path) {
+                if let Ok(wrapped) = serde_json::from_str::<serde_json::Value>(&content) {
+                    let inner = wrapped.get("virtual_packages").cloned().unwrap_or(wrapped);
+                    if let Ok(m) = serde_json::from_value::<HashMap<String, Vec<String>>>(inner) {
+                        for (k, v) in m {
+                            self.virtual_packages.entry(k).or_default().extend(v);
+                        }
                     }
                 }
             }
@@ -866,10 +928,19 @@ impl PackageDatabase {
         Ok(())
     }
 
-    /// Save database to disk
+    /// Save the user overlay (mappings + tombstones) to disk
+    ///
+    /// Uses the same wrapped `{version, count, mappings, removed}` format as
+    /// `db/mappings.json` so all readers stay compatible.
     pub fn save(&self) -> Result<()> {
         let mappings_path = self.db_dir.join("mappings.json");
-        let content = serde_json::to_string_pretty(&self.mappings)?;
+        let wrapped = serde_json::json!({
+            "version": DB_FORMAT_VERSION,
+            "count": self.mappings.len(),
+            "mappings": &self.mappings,
+            "removed": self.removed.iter().collect::<Vec<_>>(),
+        });
+        let content = serde_json::to_string_pretty(&wrapped)?;
         std::fs::write(mappings_path, content)?;
         Ok(())
     }
@@ -924,11 +995,7 @@ impl PackageDatabase {
 
         tracing::info!("Fetching package mappings from {}", url);
 
-        let client = reqwest::Client::builder()
-            .user_agent(format!("{}/{}", crate::NAME, crate::VERSION))
-            .timeout(std::time::Duration::from_secs(config.network.timeout))
-            .build()
-            .map_err(|e| RexebError::Network(e.to_string()))?;
+        let client = config.http_client()?;
 
         let resp = match client.get(url).send().await {
             Ok(r) => r,
@@ -983,7 +1050,38 @@ impl PackageDatabase {
         Ok(())
     }
 
+    /// Extract a single-value field (e.g. `%NAME%`) from a pacman `desc` file
+    ///
+    /// Values sit after a blank line, so blank and `%MARKER%` lines are
+    /// skipped — naive `lines().next()` parsing returns an empty string.
+    fn desc_value(content: &str, marker: &str) -> Option<String> {
+        let start = content.find(marker)?;
+        content[start + marker.len()..]
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty() && !l.starts_with('%'))
+            .map(|s| s.to_string())
+    }
+
+    /// Extract a multi-value field (e.g. `%PROVIDES%`) from a pacman `desc` file
+    fn desc_list(content: &str, marker: &str) -> Vec<String> {
+        let start = match content.find(marker) {
+            Some(s) => s,
+            None => return Vec::new(),
+        };
+        content[start + marker.len()..]
+            .lines()
+            .skip_while(|l| l.trim().is_empty())
+            .take_while(|l| !l.starts_with('%'))
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect()
+    }
+
     /// Update virtual packages database by parsing Arch sync databases
+    ///
+    /// Also populates the Arch package cache (name/version/description) used
+    /// by offline search and fuzzy matching, and persists both to disk.
     pub async fn update_virtual_packages(&mut self, _force: bool) -> Result<()> {
         let sync_dir = Path::new("/var/lib/pacman/sync");
         if !sync_dir.exists() {
@@ -1012,14 +1110,12 @@ impl PackageDatabase {
                 let entry_path = entry.path()?;
 
                 // Each package has a directory named <pkgname>-<pkgver>/desc
-                let components: Vec<_> = entry_path.components().collect();
-                if components.len() < 2 {
-                    continue;
-                }
-
-                let file_name = components[1].as_os_str().to_string_lossy().to_string();
-
-                if file_name != "desc" {
+                // (tolerate a leading `./` by comparing the file name only)
+                let is_desc = entry_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    == Some("desc");
+                if !is_desc {
                     continue;
                 }
 
@@ -1028,32 +1124,40 @@ impl PackageDatabase {
                 let mut entry_reader = entry;
                 entry_reader.read_to_string(&mut content)?;
 
-                // Extract package name
-                let pkg_name = if let Some(start) = content.find("%NAME%") {
-                    let rest = &content[start + 6..];
-                    rest.lines().next().unwrap_or("").trim().to_string()
-                } else {
-                    continue;
+                let pkg_name = match Self::desc_value(&content, "%NAME%") {
+                    Some(n) => n,
+                    None => continue,
                 };
+                let pkg_version = Self::desc_value(&content, "%VERSION%").unwrap_or_default();
+                let pkg_desc = Self::desc_value(&content, "%DESC%").unwrap_or_default();
+                let provides = Self::desc_list(&content, "%PROVIDES%");
+                let replaces = Self::desc_list(&content, "%REPLACES%");
 
-                // Extract Provides field
-                if let Some(start) = content.find("%PROVIDES%") {
-                    let rest = &content[start + 10..];
-                    let provides: Vec<String> = rest
-                        .lines()
-                        .take_while(|l| !l.starts_with('%'))
-                        .map(|l| l.trim().to_string())
-                        .filter(|l| !l.is_empty())
-                        .collect();
+                self.arch_packages.insert(
+                    pkg_name.clone(),
+                    ArchPackageInfo {
+                        name: pkg_name.clone(),
+                        version: pkg_version,
+                        description: pkg_desc,
+                        provides: provides.clone(),
+                        replaces,
+                    },
+                );
 
-                    for provide in provides {
-                        if provide != pkg_name {
-                            new_virtuals
-                                .entry(provide)
-                                .or_default()
-                                .push(pkg_name.clone());
-                        }
+                for provide in provides {
+                    // Provides may carry versions (`foo=1.2`); index the bare name
+                    let base = provide
+                        .split(['=', '<', '>'])
+                        .next()
+                        .unwrap_or("")
+                        .trim();
+                    if base.is_empty() || base == pkg_name {
+                        continue;
                     }
+                    new_virtuals
+                        .entry(base.to_string())
+                        .or_default()
+                        .push(pkg_name.clone());
                 }
             }
         }
@@ -1065,10 +1169,30 @@ impl PackageDatabase {
                 .or_default()
                 .extend(providers);
         }
+        // Deduplicate provider lists (repeated updates append otherwise)
+        for providers in self.virtual_packages.values_mut() {
+            providers.sort();
+            providers.dedup();
+        }
+
+        // Persist both caches (previously update_virtual_packages had no
+        // persistent effect at all)
+        let virtuals_path = self.db_dir.join("virtual_packages.json");
+        let wrapped = serde_json::json!({
+            "version": 1,
+            "virtual_packages": &self.virtual_packages,
+        });
+        std::fs::write(&virtuals_path, serde_json::to_string_pretty(&wrapped)?)?;
+        let arch_path = self.db_dir.join("arch_packages.json");
+        std::fs::write(
+            &arch_path,
+            serde_json::to_string_pretty(&self.arch_packages)?,
+        )?;
 
         tracing::info!(
-            "Updated virtual packages database ({} entries)",
-            self.virtual_packages.len()
+            "Updated virtual packages ({} entries) and Arch package cache ({} packages)",
+            self.virtual_packages.len(),
+            self.arch_packages.len()
         );
         Ok(())
     }
@@ -1080,11 +1204,7 @@ impl PackageDatabase {
 
         tracing::info!("Fetching AUR package list from {}", url);
 
-        let client = reqwest::Client::builder()
-            .user_agent(format!("{}/{}", crate::NAME, crate::VERSION))
-            .timeout(std::time::Duration::from_secs(config.network.timeout))
-            .build()
-            .map_err(|e| RexebError::Network(e.to_string()))?;
+        let client = config.http_client()?;
 
         let resp = client
             .get(url)
@@ -1099,27 +1219,26 @@ impl PackageDatabase {
             )));
         }
 
-        // packages.gz format: one package per line, fields separated by whitespace
-        // Format: name version description...
+        // packages.gz is a plain list of package names, one per line
+        // (a `name version description...` row layout is also accepted).
         let bytes = resp.bytes().await?;
         let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
         let mut raw = String::new();
         decoder.read_to_string(&mut raw)?;
 
         let mut count = 0;
-        for line in raw.lines().take(50_000) {
+        for line in raw.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
             let parts: Vec<&str> = line.splitn(3, char::is_whitespace).collect();
-            if parts.len() < 2 {
-                continue;
-            }
-
             let name = parts[0].trim().to_string();
-            let version = parts[1].trim().to_string();
-            let description = parts.get(2).map(|s| s.trim().to_string()).unwrap_or_default();
-
-            if name.is_empty() || version.is_empty() {
+            if name.is_empty() {
                 continue;
             }
+            let version = parts.get(1).map(|s| s.trim().to_string()).unwrap_or_default();
+            let description = parts.get(2).map(|s| s.trim().to_string()).unwrap_or_default();
 
             self.aur_packages.insert(
                 name.clone(),
@@ -1145,14 +1264,14 @@ impl PackageDatabase {
     }
 
     /// Search for Arch packages
-    pub async fn search_arch(&self, query: &str, _fuzzy: bool, limit: usize) -> Result<Vec<SearchResult>> {
+    pub async fn search_arch(&self, query: &str, fuzzy: bool, limit: usize) -> Result<Vec<SearchResult>> {
         let query_lower = query.to_lowercase();
 
         // Try local cache first
         let mut results: Vec<SearchResult> = self.arch_packages
             .iter()
             .filter(|(name, info)| {
-                name.to_lowercase().contains(&query_lower) 
+                name.to_lowercase().contains(&query_lower)
                     || info.description.to_lowercase().contains(&query_lower)
             })
             .take(limit)
@@ -1164,6 +1283,27 @@ impl PackageDatabase {
             })
             .collect();
 
+        // Fuzzy fallback over the cache when substring matches are scarce
+        if fuzzy && results.len() < limit.min(5) {
+            for (name, info) in &self.arch_packages {
+                if results.iter().any(|r| &r.name == name) {
+                    continue;
+                }
+                let score = strsim::jaro_winkler(&query_lower, &name.to_lowercase()) as f32;
+                if score >= 0.8 {
+                    results.push(SearchResult {
+                        name: name.clone(),
+                        description: info.description.clone(),
+                        version: info.version.clone(),
+                        score,
+                    });
+                }
+                if results.len() >= limit {
+                    break;
+                }
+            }
+        }
+
         // Fall back to pacman -Ss if cache empty or no matches
         if results.is_empty() {
             if let Ok(output) = std::process::Command::new("pacman")
@@ -1172,18 +1312,38 @@ impl PackageDatabase {
                 .output()
             {
                 if output.status.success() {
+                    // pacman -Ss format:
+                    //   core/glibc 2.39-1 [installed]
+                    //       GNU C Library ...
                     let stdout = String::from_utf8_lossy(&output.stdout);
-                    for line in stdout.lines().take(limit) {
-                        // pacman -Ss format: "core/pkgname pkgver\n    description"
-                        if let Some(rest) = line.strip_suffix('/') {
-                            if let Some((pkg, ver)) = rest.split_once(' ') {
-                                results.push(SearchResult {
-                                    name: pkg.to_string(),
-                                    description: String::new(),
-                                    version: ver.to_string(),
-                                    score: 0.9,
-                                });
+                    let mut lines = stdout.lines().peekable();
+                    while let Some(line) = lines.next() {
+                        if line.starts_with(' ') || line.starts_with('\t') || line.trim().is_empty() {
+                            continue;
+                        }
+                        let mut parts = line.split_whitespace();
+                        let name_token = parts.next().unwrap_or("");
+                        let version = parts.next().unwrap_or("").to_string();
+                        let name = name_token.rsplit('/').next().unwrap_or(name_token);
+                        if name.is_empty() {
+                            continue;
+                        }
+                        let mut description = String::new();
+                        if let Some(next) = lines.peek() {
+                            if next.starts_with(' ') || next.starts_with('\t') {
+                                description = next.trim().to_string();
+                                lines.next();
                             }
+                        }
+                        let score = if name.eq_ignore_ascii_case(query) { 1.0 } else { 0.9 };
+                        results.push(SearchResult {
+                            name: name.to_string(),
+                            description,
+                            version,
+                            score,
+                        });
+                        if results.len() >= limit {
+                            break;
                         }
                     }
                 }
@@ -1195,14 +1355,14 @@ impl PackageDatabase {
     }
 
     /// Search for AUR packages
-    pub async fn search_aur(&self, query: &str, _fuzzy: bool, limit: usize) -> Result<Vec<SearchResult>> {
+    pub async fn search_aur(&self, query: &str, fuzzy: bool, limit: usize) -> Result<Vec<SearchResult>> {
         let query_lower = query.to_lowercase();
 
         // Try local cache first
         let mut results: Vec<SearchResult> = self.aur_packages
             .iter()
             .filter(|(name, info)| {
-                name.to_lowercase().contains(&query_lower) 
+                name.to_lowercase().contains(&query_lower)
                     || info.description.to_lowercase().contains(&query_lower)
             })
             .take(limit)
@@ -1213,6 +1373,27 @@ impl PackageDatabase {
                 score: if name.to_lowercase() == query_lower { 1.0 } else { 0.8 },
             })
             .collect();
+
+        // Fuzzy fallback over the cache when substring matches are scarce
+        if fuzzy && results.len() < limit.min(5) {
+            for (name, info) in &self.aur_packages {
+                if results.iter().any(|r| &r.name == name) {
+                    continue;
+                }
+                let score = strsim::jaro_winkler(&query_lower, &name.to_lowercase()) as f32;
+                if score >= 0.8 {
+                    results.push(SearchResult {
+                        name: name.clone(),
+                        description: info.description.clone(),
+                        version: info.version.clone(),
+                        score,
+                    });
+                }
+                if results.len() >= limit {
+                    break;
+                }
+            }
+        }
 
         // Fall back to live AUR search if cache empty or no matches
         if results.is_empty() {
@@ -1235,6 +1416,13 @@ impl PackageDatabase {
 
     /// Add a custom mapping
     pub fn add_mapping(&mut self, debian: &str, arch: &str, confidence: f32) {
+        let confidence = if confidence.is_finite() {
+            confidence.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        // Re-adding lifts any previous tombstone
+        self.removed.remove(debian);
         self.mappings.insert(
             debian.to_string(),
             PackageMapping {
@@ -1244,5 +1432,155 @@ impl PackageDatabase {
                 source: MappingSource::User,
             },
         );
+    }
+
+    /// Remove a mapping
+    ///
+    /// Returns `true` when a mapping was present. A tombstone is recorded so
+    /// embedded/dev mappings do not resurface on the next load; call `save`
+    /// to persist the removal.
+    pub fn remove_mapping(&mut self, debian: &str) -> bool {
+        let existed = self.mappings.remove(debian).is_some();
+        if existed {
+            self.removed.insert(debian.to_string());
+        }
+        existed
+    }
+
+    /// Access the effective (merged) mappings
+    pub fn mappings(&self) -> &HashMap<String, PackageMapping> {
+        &self.mappings
+    }
+
+    /// Enlarge mappings by scanning local sync DBs and debtap's mapping table
+    ///
+    /// Harvests `Provides` from `/var/lib/pacman/sync/*.db` and parses
+    /// debtap's Debian→Arch table, proposing new entries at 0.75 confidence.
+    /// Candidates are validated against Debian/Arch naming policy so junk
+    /// keys (sonames, versioned provides) cannot pollute the database.
+    pub async fn enlarge(&mut self) -> Result<usize> {
+        let mut provides_map: HashMap<String, String> = HashMap::new();
+        let mut arch_count = 0usize;
+
+        // Scan Arch sync DBs to harvest all package names + provides
+        let sync_dir = Path::new("/var/lib/pacman/sync");
+        if sync_dir.exists() {
+            for entry in std::fs::read_dir(sync_dir)
+                .map_err(|e| RexebError::Other(format!("Cannot read pacman sync dir: {}", e)))?
+            {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("db") {
+                    continue;
+                }
+                let file = match std::fs::File::open(&path) {
+                    Ok(f) => f,
+                    Err(_) => continue,
+                };
+                let decoder = flate2::read::GzDecoder::new(file);
+                let mut archive = tar::Archive::new(decoder);
+                let entries = match archive.entries() {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
+                for ent in entries.flatten() {
+                    let entry_path = ent.path().map(|p| p.to_path_buf()).unwrap_or_default();
+                    if entry_path.file_name().and_then(|n| n.to_str()) != Some("desc") {
+                        continue;
+                    }
+                    let mut content = String::new();
+                    let mut r = ent;
+                    if r.read_to_string(&mut content).is_err() {
+                        continue;
+                    }
+                    let name = match Self::desc_value(&content, "%NAME%") {
+                        Some(n) => n,
+                        None => continue,
+                    };
+                    arch_count += 1;
+                    for prov in Self::desc_list(&content, "%PROVIDES%") {
+                        let base = prov
+                            .split(['=', '<', '>'])
+                            .next()
+                            .unwrap_or("")
+                            .trim()
+                            .to_string();
+                        if base.is_empty() || base == name {
+                            continue;
+                        }
+                        provides_map.entry(base).or_insert(name.clone());
+                    }
+                }
+            }
+        }
+
+        // Debtap mapping import (if reachable and not offline)
+        let config = crate::config::Config::load().unwrap_or_default();
+        let debtap_url = config.network.debtap_url.clone();
+        let mut debtap_mappings: HashMap<String, String> = HashMap::new();
+        if !config.network.offline {
+            if let Ok(client) = config.http_client() {
+                if let Ok(resp) = client.get(debtap_url).send().await {
+                    if resp.status().is_success() {
+                        if let Ok(text) = resp.text().await {
+                            // debtap's table has changed shape over time; accept
+                            // `"deb" => "arch"`, `["deb"]="arch"` and `deb=arch`
+                            let patterns = [
+                                r#""([^"]+)"\s*=>\s*"([^"]+)""#,
+                                r#"\["([^"\]]+)"\]\s*=\s*"([^"]+)""#,
+                                r"(?m)^\s*([a-z0-9][a-z0-9+._~-]*)\s*=\s*([a-z0-9][a-z0-9@._+-]*)\s*$",
+                            ];
+                            for pattern in patterns {
+                                if let Ok(re) = regex::Regex::new(pattern) {
+                                    for cap in re.captures_iter(&text).take(3000) {
+                                        let deb = cap[1].to_string();
+                                        let arch = cap[2].to_string();
+                                        if !deb.is_empty() && !arch.is_empty() {
+                                            debtap_mappings.insert(deb, arch);
+                                        }
+                                    }
+                                }
+                            }
+                            tracing::info!("Parsed {} debtap mappings", debtap_mappings.len());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Debian naming policy for proposed keys
+        let deb_name_re = match regex::Regex::new(r"^[a-z0-9][a-z0-9+._~-]*$") {
+            Ok(re) => re,
+            Err(_) => {
+                return Err(RexebError::Other("Invalid internal regex".into()));
+            }
+        };
+
+        // Merge: for each debtap or provides entry not in DB, propose with
+        // confidence 0.75 after validating both sides
+        let mut added = 0;
+        for (deb, arch) in debtap_mappings.iter().chain(provides_map.iter()) {
+            if deb.contains(".so") || !deb_name_re.is_match(deb) {
+                continue;
+            }
+            if arch.is_empty() || arch.contains('/') || arch.contains(' ') {
+                continue;
+            }
+            if self.lookup(deb)?.is_none() {
+                self.add_mapping(deb, arch, 0.75);
+                added += 1;
+            }
+        }
+
+        if added > 0 {
+            self.save()?;
+        }
+
+        tracing::info!(
+            "Enlarge finished: {} new mappings, scanned {} arch packages",
+            added,
+            arch_count
+        );
+        Ok(added)
     }
 }

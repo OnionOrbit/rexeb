@@ -208,6 +208,12 @@ impl<'a> InstallScriptGenerator<'a> {
             line = format!("systemctl {} {}.service 2>/dev/null || true", action, service);
         }
 
+        // Bare systemctl calls must never fail the transaction (e.g. when
+        // systemd is not running inside a container or chroot)
+        if SYSTEMCTL.is_match(&line) && !line.contains("|| true") {
+            line = format!("{} 2>/dev/null || true", line.trim());
+        }
+
         // Ensure ldconfig is present for library packages
         if LDCONFIG.is_match(&line) {
             line = "ldconfig".to_string();

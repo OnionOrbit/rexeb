@@ -74,6 +74,9 @@ pub struct NetworkConfig {
     pub mappings_url: String,
     /// URL for AUR package metadata snapshot
     pub aur_cache_url: String,
+    /// debtap script URL harvested by `update --enlarge`
+    /// (pin to a commit for reproducible imports)
+    pub debtap_url: String,
     /// Enable offline mode
     pub offline: bool,
 }
@@ -130,9 +133,10 @@ impl Default for NetworkConfig {
         Self {
             timeout: 30,
             proxy: None,
-            aur_url: "https://aur.archlinux.org/rpc".to_string(),
+            aur_url: "https://aur.archlinux.org/rpc/v5".to_string(),
             mappings_url: "https://raw.githubusercontent.com/OnionOrbit/rexeb/main/db/mappings.json".to_string(),
             aur_cache_url: "https://aur.archlinux.org/packages.gz".to_string(),
+            debtap_url: "https://raw.githubusercontent.com/helixarch/debtap/master/debtap".to_string(),
             offline: false,
         }
     }
@@ -172,23 +176,36 @@ impl Default for Config {
 
 impl Config {
     /// Get the config file path
+    ///
+    /// Honors the `REXEB_CONFIG` environment variable (also populated from
+    /// `--config`) so users can point rexeb at an alternate config file.
     pub fn config_path() -> Result<PathBuf> {
+        if let Ok(custom) = std::env::var("REXEB_CONFIG") {
+            let custom = custom.trim();
+            if !custom.is_empty() {
+                return Ok(PathBuf::from(custom));
+            }
+        }
         let config_dir = dirs::config_dir()
             .ok_or_else(|| RexebError::Config("Could not find config directory".into()))?;
         Ok(config_dir.join("rexeb").join("config.toml"))
     }
 
-    /// Load configuration from file
-    pub fn load() -> Result<Self> {
-        let path = Self::config_path()?;
-        
+    /// Load configuration from a specific file
+    pub fn load_from(path: &std::path::Path) -> Result<Self> {
         if path.exists() {
-            let content = std::fs::read_to_string(&path)?;
+            let content = std::fs::read_to_string(path)?;
             let config: Config = toml::from_str(&content)?;
             Ok(config)
         } else {
             Ok(Self::default())
         }
+    }
+
+    /// Load configuration from file
+    pub fn load() -> Result<Self> {
+        let path = Self::config_path()?;
+        Self::load_from(&path)
     }
 
     /// Save configuration to file
@@ -247,6 +264,7 @@ impl Config {
             "network.aur_url" => Some(self.network.aur_url.clone()),
             "network.mappings_url" => Some(self.network.mappings_url.clone()),
             "network.aur_cache_url" => Some(self.network.aur_cache_url.clone()),
+            "network.debtap_url" => Some(self.network.debtap_url.clone()),
             "network.offline" => Some(self.network.offline.to_string()),
             
             "logging.level" => Some(self.logging.level.clone()),
@@ -274,9 +292,13 @@ impl Config {
                 self.general.output_dir = Some(PathBuf::from(value));
             }
             "general.jobs" => {
-                self.general.jobs = Some(value.parse().map_err(|_| {
+                let jobs: usize = value.parse().map_err(|_| {
                     RexebError::Config("Invalid number for jobs".into())
-                })?);
+                })?;
+                if jobs == 0 {
+                    return Err(RexebError::Config("jobs must be at least 1".into()));
+                }
+                self.general.jobs = Some(jobs);
             }
             "general.auto_yes" => {
                 self.general.auto_yes = value.parse().map_err(|_| {
@@ -285,6 +307,12 @@ impl Config {
             }
             
             "conversion.default_format" => {
+                if crate::cli::OutputFormat::from_config_str(value).is_none() {
+                    return Err(RexebError::Config(format!(
+                        "Invalid default_format '{}' (expected pkg.tar.zst, pkg.tar.xz, or pkg.tar.gz)",
+                        value
+                    )));
+                }
                 self.conversion.default_format = value.to_string();
             }
             "conversion.skip_deps" => {
@@ -308,9 +336,15 @@ impl Config {
                 })?;
             }
             "conversion.min_match_confidence" => {
-                self.conversion.min_match_confidence = value.parse().map_err(|_| {
+                let v: f32 = value.parse().map_err(|_| {
                     RexebError::Config("Invalid number for min_match_confidence".into())
                 })?;
+                if !v.is_finite() || v < 0.0 || v > 1.0 {
+                    return Err(RexebError::Config(
+                        "min_match_confidence must be between 0.0 and 1.0".into(),
+                    ));
+                }
+                self.conversion.min_match_confidence = v;
             }
             
             "network.timeout" => {
@@ -329,6 +363,12 @@ impl Config {
             }
             "network.aur_cache_url" => {
                 self.network.aur_cache_url = value.to_string();
+            }
+            "network.debtap_url" => {
+                if value.trim().is_empty() {
+                    return Err(RexebError::Config("debtap_url must not be empty".into()));
+                }
+                self.network.debtap_url = value.to_string();
             }
             "network.offline" => {
                 self.network.offline = value.parse().map_err(|_| {
@@ -349,7 +389,17 @@ impl Config {
             }
             
             "java.conflict_strategy" => {
-                self.java.conflict_strategy = value.to_string();
+                match value {
+                    "jre" | "jdk" | "prefer-jdk" | "prefer-jre" | "prompt" => {
+                        self.java.conflict_strategy = value.to_string();
+                    }
+                    _ => {
+                        return Err(RexebError::Config(format!(
+                            "Invalid conflict_strategy '{}' (expected jre, jdk, prefer-jdk, prefer-jre, or prompt)",
+                            value
+                        )));
+                    }
+                }
             }
             "java.add_java_conflicts" => {
                 self.java.add_java_conflicts = value.parse().map_err(|_| {
@@ -384,6 +434,25 @@ impl Config {
                 .unwrap_or_else(|| PathBuf::from("/usr/share"))
                 .join("rexeb")
         })
+    }
+
+    /// Build an HTTP client honoring the `timeout` and `proxy` settings
+    pub fn http_client(&self) -> Result<reqwest::Client> {
+        let mut builder = reqwest::Client::builder()
+            .user_agent(format!("{}/{}", crate::NAME, crate::VERSION))
+            .timeout(std::time::Duration::from_secs(self.network.timeout.max(1)));
+        if let Some(ref proxy) = self.network.proxy {
+            let proxy = proxy.trim();
+            if !proxy.is_empty() {
+                let parsed = reqwest::Proxy::all(proxy).map_err(|e| {
+                    RexebError::Config(format!("Invalid proxy URL '{}': {}", proxy, e))
+                })?;
+                builder = builder.proxy(parsed);
+            }
+        }
+        builder
+            .build()
+            .map_err(|e| RexebError::Network(e.to_string()))
     }
 }
 

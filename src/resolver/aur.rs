@@ -98,22 +98,63 @@ pub struct AurClient {
     base_url: String,
 }
 
+/// Normalize a configured AUR RPC base URL to the v5 path-style endpoint
+///
+/// Older configs store `https://aur.archlinux.org/rpc`; the search/info
+/// calls below need `.../rpc/v5`.
+fn normalize_aur_url(url: &str) -> String {
+    let url = url.trim_end_matches('/');
+    if url.ends_with("/rpc") {
+        format!("{}/v5", url)
+    } else {
+        url.to_string()
+    }
+}
+
 impl AurClient {
     /// Create a new AUR client
+    ///
+    /// Honors `network.timeout`, `network.proxy` and `network.aur_url` from
+    /// the user configuration so requests can neither hang forever nor
+    /// bypass a configured proxy.
     pub fn new() -> Self {
-        Self {
-            client: Client::builder()
+        let config = crate::config::Config::load().unwrap_or_default();
+        let client = config.http_client().unwrap_or_else(|_| {
+            Client::builder()
                 .user_agent(format!("{}/{}", crate::NAME, crate::VERSION))
+                .timeout(std::time::Duration::from_secs(20))
                 .build()
-                .unwrap_or_default(),
-            base_url: AUR_RPC_URL.to_string(),
+                .unwrap_or_default()
+        });
+        let configured = config.network.aur_url.trim().to_string();
+        let base = if configured.is_empty() {
+            AUR_RPC_URL
+        } else {
+            configured.as_str()
+        };
+        Self {
+            client,
+            base_url: normalize_aur_url(base),
         }
+    }
+
+    /// Create a new AUR client with an explicit base URL (primarily for tests)
+    pub fn with_base_url(base_url: &str) -> Self {
+        let mut client = Self::new();
+        client.base_url = normalize_aur_url(base_url);
+        client
     }
 
     /// Search for packages by name (keyword search)
     pub async fn search(&self, query: &str) -> Result<Vec<AurPackage>> {
-        let url = format!("{}/search/{}", self.base_url, query);
-        self.make_request(&url).await
+        let base = self.base_url.trim_end_matches('/');
+        let mut url = reqwest::Url::parse(&format!("{}/search/", base))
+            .map_err(|e| RexebError::Network(format!("Invalid AUR URL: {}", e)))?;
+        url.path_segments_mut()
+            .map_err(|_| RexebError::Network("Invalid AUR URL".into()))?
+            .push(query);
+        url.query_pairs_mut().append_pair("by", "name-desc");
+        self.make_request(url.as_str()).await
     }
 
     /// Get info for specific packages
@@ -122,23 +163,27 @@ impl AurClient {
             return Ok(Vec::new());
         }
 
-        let mut url = format!("{}/info", self.base_url);
-        
-        // Build query string manually to handle multiple 'arg[]' parameters
-        let params: Vec<String> = names.iter()
-            .map(|n| format!("arg[]={}", n))
-            .collect();
-        
-        if !params.is_empty() {
-            url.push('?');
-            url.push_str(&params.join("&"));
+        let base = self.base_url.trim_end_matches('/');
+        let mut url = reqwest::Url::parse(&format!("{}/info", base))
+            .map_err(|e| RexebError::Network(format!("Invalid AUR URL: {}", e)))?;
+        {
+            let mut pairs = url.query_pairs_mut();
+            for name in names {
+                pairs.append_pair("arg[]", name);
+            }
         }
 
-        self.make_request(&url).await
+        self.make_request(url.as_str()).await
     }
 
     /// Helper to make requests and parse response
     async fn make_request(&self, url: &str) -> Result<Vec<AurPackage>> {
+        if crate::config::Config::load()
+            .map(|c| c.network.offline)
+            .unwrap_or(false)
+        {
+            return Err(RexebError::Network("offline mode: AUR request skipped".into()));
+        }
         let resp = self.client.get(url)
             .send()
             .await
