@@ -12,7 +12,7 @@ use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Span, Spans},
+    text::{Line, Span},
     widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
     Terminal,
 };
@@ -43,6 +43,12 @@ pub struct App {
     pub status: String,
     /// Logs
     pub logs: Vec<String>,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl App {
@@ -148,7 +154,7 @@ async fn run_app<B: Backend>(
     }
 }
 
-fn ui<B: Backend>(f: &mut ratatui::Frame<B>, app: &App) {
+fn ui(f: &mut ratatui::Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -164,7 +170,7 @@ fn ui<B: Backend>(f: &mut ratatui::Frame<B>, app: &App) {
         .split(f.size());
 
     // Title
-    let title = Paragraph::new(Spans::from(vec![
+    let title = Paragraph::new(Line::from(vec![
         Span::styled("Rexeb - Smarter Package Converter", Style::default().add_modifier(Modifier::BOLD)),
     ]))
     .block(Block::default().borders(Borders::ALL));
