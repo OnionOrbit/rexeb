@@ -334,8 +334,8 @@ impl PackageMetadata {
         if let Some(ref url) = self.url {
             lines.push(format!("url = {}", url));
         }
-        
-        lines.push(format!("builddate = {}", chrono::Utc::now().timestamp()));
+
+        lines.push(format!("builddate = {}", crate::build_timestamp()));
         
         if let Some(ref maintainer) = self.maintainer {
             lines.push(format!("packager = {}", maintainer));
@@ -350,36 +350,54 @@ impl PackageMetadata {
         // Store original deb name for provenance; use effective_name's source as fallback
         lines.push(format!("x-rexeb-source = {}", self.name));
 
-        // Dependencies
+        // Dependencies (mapped only: an unmapped Debian name emitted verbatim
+        // becomes an unresolvable pacman dependency, e.g. a self-reference
+        // like `depend = weebots` that breaks `pacman -U`)
         for dep in self.get_deps(DependencyType::Depends) {
-            lines.push(format!("depend = {}", dep.to_arch_string()));
+            if dep.is_mapped() {
+                lines.push(format!("depend = {}", dep.to_arch_string()));
+            }
         }
         for dep in self.get_deps(DependencyType::PreDepends) {
-            lines.push(format!("depend = {}", dep.to_arch_string()));
+            if dep.is_mapped() {
+                lines.push(format!("depend = {}", dep.to_arch_string()));
+            }
         }
-        
+
         // Optional dependencies
         for dep in self.get_deps(DependencyType::Recommends) {
-            lines.push(format!("optdepend = {}", dep.to_arch_string()));
+            if dep.is_mapped() {
+                lines.push(format!("optdepend = {}", dep.to_arch_string()));
+            }
         }
         for dep in self.get_deps(DependencyType::Suggests) {
-            lines.push(format!("optdepend = {}", dep.to_arch_string()));
+            if dep.is_mapped() {
+                lines.push(format!("optdepend = {}", dep.to_arch_string()));
+            }
         }
 
         // Conflicts
         for dep in self.get_deps(DependencyType::Conflicts) {
-            lines.push(format!("conflict = {}", dep.to_arch_string()));
+            if dep.is_mapped() {
+                lines.push(format!("conflict = {}", dep.to_arch_string()));
+            }
         }
         for dep in self.get_deps(DependencyType::Breaks) {
-            lines.push(format!("conflict = {}", dep.to_arch_string()));
+            if dep.is_mapped() {
+                lines.push(format!("conflict = {}", dep.to_arch_string()));
+            }
         }
 
         // Replaces
         for dep in self.get_deps(DependencyType::Replaces) {
-            lines.push(format!("replaces = {}", dep.to_arch_string()));
+            if dep.is_mapped() {
+                lines.push(format!("replaces = {}", dep.to_arch_string()));
+            }
         }
 
-        // Provides
+        // Provides (always emitted: provides introduce names rather than
+        // referencing installed packages, so even an unmapped Debian name
+        // is meaningful here)
         for dep in self.get_deps(DependencyType::Provides) {
             lines.push(format!("provides = {}", dep.to_arch_string()));
         }
@@ -390,31 +408,35 @@ impl PackageMetadata {
     /// Generate PKGBUILD content
     pub fn to_pkgbuild(&self) -> String {
         let mut lines = Vec::new();
-        
+
         lines.push("# Maintainer: Converted by rexeb".to_string());
         if let Some(ref maintainer) = self.maintainer {
             lines.push(format!("# Original: {}", maintainer));
         }
+        lines.push("# NOTE: binary repack generated from a .deb; files are copied verbatim.".to_string());
+        lines.push("# There is no source=() — for AUR uploads, add source()/sha256sums() manually.".to_string());
         lines.push(String::new());
-        
+
         lines.push(format!("pkgname={}", self.effective_name()));
-        
+
         if let Some(epoch) = self.epoch {
             if epoch > 0 {
                 lines.push(format!("epoch={}", epoch));
             }
         }
-        
+
         lines.push(format!("pkgver={}", self.version));
         lines.push(format!("pkgrel={}", self.release));
-        lines.push(format!("pkgdesc=\"{}\"", self.description.replace('"', "\\\"")));
+        lines.push(format!("pkgdesc=\"{}\"", pkgbuild_escape(&self.description)));
         lines.push(format!("arch=('{}')", self.arch.to_arch_name()));
-        
+
         if let Some(ref url) = self.url {
-            lines.push(format!("url=\"{}\"", url));
+            lines.push(format!("url=\"{}\"", pkgbuild_escape(url)));
         }
-        
+
         lines.push(format!("license=('{}')", self.license.to_pkgbuild()));
+        // Prebuilt binaries: never re-strip or prune empty dirs automatically
+        lines.push("options=('!strip' '!emptydirs')".to_string());
 
         // Dependencies
         let deps: Vec<String> = self.get_deps(DependencyType::Depends)
@@ -426,6 +448,10 @@ impl PackageMetadata {
         if !deps.is_empty() {
             lines.push(format!("depends=({})", deps.join(" ")));
         }
+        lines.extend(self.dropped_dep_comments(
+            "depends",
+            &[DependencyType::Depends, DependencyType::PreDepends],
+        ));
 
         // Optional dependencies
         let optdeps: Vec<String> = self.get_deps(DependencyType::Recommends)
@@ -437,6 +463,10 @@ impl PackageMetadata {
         if !optdeps.is_empty() {
             lines.push(format!("optdepends=({})", optdeps.join(" ")));
         }
+        lines.extend(self.dropped_dep_comments(
+            "optdepends",
+            &[DependencyType::Recommends, DependencyType::Suggests],
+        ));
 
         // Conflicts
         let conflicts: Vec<String> = self.get_deps(DependencyType::Conflicts)
@@ -448,6 +478,10 @@ impl PackageMetadata {
         if !conflicts.is_empty() {
             lines.push(format!("conflicts=({})", conflicts.join(" ")));
         }
+        lines.extend(self.dropped_dep_comments(
+            "conflicts",
+            &[DependencyType::Conflicts, DependencyType::Breaks],
+        ));
 
         // Replaces
         let replaces: Vec<String> = self.get_deps(DependencyType::Replaces)
@@ -458,11 +492,12 @@ impl PackageMetadata {
         if !replaces.is_empty() {
             lines.push(format!("replaces=({})", replaces.join(" ")));
         }
+        lines.extend(self.dropped_dep_comments("replaces", &[DependencyType::Replaces]));
 
-        // Provides
+        // Provides (never filtered: provides introduce names, so an unmapped
+        // Debian name is still meaningful — mirrors to_pkginfo())
         let provides: Vec<String> = self.get_deps(DependencyType::Provides)
             .iter()
-            .filter(|d| d.is_mapped())
             .map(|d| format!("'{}'", d.to_arch_string()))
             .collect();
         if !provides.is_empty() {
@@ -476,6 +511,54 @@ impl PackageMetadata {
 
         lines.join("\n")
     }
+
+    /// Comment lines describing dependencies dropped from `field`
+    ///
+    /// Unmapped (and non-virtual) dependencies are left out of the generated
+    /// arrays; listing them as comments keeps the loss visible instead of
+    /// silently producing an under-specified package.
+    fn dropped_dep_comments(&self, field: &str, types: &[DependencyType]) -> Vec<String> {
+        let dropped: Vec<&Dependency> = types
+            .iter()
+            .flat_map(|t| self.get_deps(*t))
+            .filter(|d| !d.is_mapped() && !d.is_virtual)
+            .collect();
+        if dropped.is_empty() {
+            return Vec::new();
+        }
+        let mut out = vec![format!(
+            "# NOTE: omitted from {}= (no Arch equivalent found):",
+            field
+        )];
+        for d in dropped {
+            let mut line = format!("#   - debian '{}'", d.debian_name);
+            if let Some(ref v) = d.version {
+                let op = d.version_op.map(|o| o.to_arch_format()).unwrap_or("");
+                line.push_str(&format!(" ({}{})", op, v));
+            }
+            out.push(line);
+        }
+        out
+    }
+}
+
+/// Escape a string for safe inclusion in a double-quoted PKGBUILD value
+///
+/// Descriptions and URLs come from untrusted `.deb` control data; without
+/// escaping, `$()`, backticks or quotes would be executed/evaluated by bash.
+fn pkgbuild_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' | '"' | '$' | '`' => {
+                out.push('\\');
+                out.push(ch);
+            }
+            '\n' | '\r' => out.push(' '),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 impl Default for PackageMetadata {

@@ -150,6 +150,14 @@ impl<'a> PackageAnalyzer<'a> {
                             path_str
                         ));
                     }
+                    // Arch uses merged-/usr: top-level /bin, /sbin, /lib* are
+                    // symlinks, so packages should ship /usr/bin, /usr/lib, ...
+                    if matches!(name_str.as_ref(), "bin" | "sbin" | "lib" | "lib32" | "lib64") {
+                        report.warnings.push(format!(
+                            "Non-/usr path (Arch uses merged-/usr, prefer /usr/{}): {}",
+                            name_str, path_str
+                        ));
+                    }
                 }
             }
 
@@ -194,9 +202,10 @@ impl<'a> PackageAnalyzer<'a> {
         {
             let executables = String::from_utf8_lossy(&output.stdout);
             for exec in executables.lines().take(5) {
-                // Just check a few executables
+                // Just check a few executables (`ldd` reports missing
+                // libraries on stdout, not stderr)
                 if let Ok(ldd_output) = Command::new("ldd").arg(exec).output() {
-                    let ldd_str = String::from_utf8_lossy(&ldd_output.stderr);
+                    let ldd_str = String::from_utf8_lossy(&ldd_output.stdout);
                     if ldd_str.contains("not found") {
                         report.lib_issues.push(format!(
                             "Missing library for: {}",
@@ -316,30 +325,34 @@ impl<'a> PackageAnalyzer<'a> {
 
     /// Check for file conflicts with installed packages
     fn check_conflicts(&self, report: &mut AnalysisReport) -> Result<()> {
-        // Use pacman to check for file conflicts
-        for file in &self.metadata.files {
-            let path_str = file.to_string_lossy();
-            
-            // Skip directories
-            if path_str.ends_with('/') {
+        // Batch paths into a few `pacman -Qo` calls instead of one process
+        // per file (thousands of spawns for large packages otherwise).
+        // Note: `pacman -Qo` exits nonzero when ANY path is unowned, but
+        // still lists the owned ones on stdout — so stdout is always parsed.
+        let existing: Vec<String> = self
+            .metadata
+            .files
+            .iter()
+            .map(|f| f.to_string_lossy().to_string())
+            .filter(|s| !s.ends_with('/'))
+            .filter(|s| Path::new(s).exists())
+            .collect();
+
+        for chunk in existing.chunks(200) {
+            if chunk.is_empty() {
                 continue;
             }
-
-            // Check if file exists on system
-            if file.exists() {
-                // Try to find which package owns it
-                if let Ok(output) = Command::new("pacman")
-                    .arg("-Qo")
-                    .arg(path_str.as_ref())
-                    .output()
-                {
-                    if output.status.success() {
-                        let owner = String::from_utf8_lossy(&output.stdout);
-                        report.conflicts.push(format!(
-                            "{}: owned by {}",
-                            path_str,
-                            owner.trim()
-                        ));
+            if let Ok(output) = Command::new("pacman")
+                .arg("-Qo")
+                .arg("--")
+                .args(chunk)
+                .output()
+            {
+                for line in String::from_utf8_lossy(&output.stdout).lines() {
+                    let line = line.trim();
+                    // Owned files print as "<path> is owned by <pkg> <ver>"
+                    if !line.is_empty() && line.contains(" is owned by ") {
+                        report.conflicts.push(line.to_string());
                     }
                 }
             }

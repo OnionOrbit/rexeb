@@ -21,7 +21,7 @@ pub struct Watermark {
     pub rexeb_version: String,
     /// ISO-8601 timestamp of conversion
     pub converted_at: String,
-    /// Original `.deb` filename or source identifier
+    /// Original source filename (`.deb`/`.rpm`/`.AppImage`) or identifier
     pub source_deb: String,
     /// Arch package name
     pub arch_name: String,
@@ -239,66 +239,72 @@ fn extract_pkg_version(desc: &str) -> Option<String> {
 
 /// Attempt to fix icon references in an installed rexeb package
 ///
-/// Scans `.desktop` files and checks `Icon=` against available icons.
+/// Scans `.desktop` files, checks each `Icon=` against the installed icon
+/// themes, and rewrites broken references to the closest available icon
+/// (falling back to a generic icon). Originals are backed up to
+/// `<file>.desktop.rexeb-bak` before writing. Requires write access to
+/// `/usr/share/applications` (i.e. run as root).
 pub fn fix_icons(pkg_name: &str) -> Result<Vec<String>> {
     let mut fixed = Vec::new();
-    let desktop_dirs = [
-        PathBuf::from(format!("/usr/share/applications/{}*.desktop", pkg_name)),
-        PathBuf::from("/usr/share/applications"),
-    ];
+    let apps_dir = Path::new("/usr/share/applications");
+    if !apps_dir.exists() {
+        return Ok(fixed);
+    }
 
-    for dir in &desktop_dirs {
-        let actual_dir = if dir.to_string_lossy().contains('*') {
-            PathBuf::from("/usr/share/applications")
-        } else {
-            dir.clone()
-        };
-        if !actual_dir.exists() {
+    for entry in std::fs::read_dir(apps_dir)?.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("desktop") {
             continue;
         }
-        for entry in std::fs::read_dir(&actual_dir).into_iter().flatten().flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("desktop") {
+        // Only touch files belonging to this package (name substring match)
+        if pkg_name != "*"
+            && !path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .contains(pkg_name)
+        {
+            continue;
+        }
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let mut new_content = content.clone();
+        let mut changed = false;
+        for line in content.lines() {
+            if let Some(icon) = line.strip_prefix("Icon=") {
+                let icon = icon.trim();
+                if icon.is_empty() || icon_exists(icon) {
+                    continue;
+                }
+                let replacement = find_replacement_icon(icon)
+                    .unwrap_or_else(|| "application-x-executable".to_string());
+                new_content = new_content.replace(
+                    &format!("Icon={}", icon),
+                    &format!("Icon={}", replacement),
+                );
+                changed = true;
+                fixed.push(format!(
+                    "{}: Icon={} -> {}",
+                    path.display(),
+                    icon,
+                    replacement
+                ));
+            }
+        }
+        if changed {
+            // Back up the original, then write the fix
+            let backup = path.with_extension("desktop.rexeb-bak");
+            if std::fs::copy(&path, &backup).is_err() {
+                fixed.push(format!(
+                    "{}: could not write fix (permission denied — run as root?)",
+                    path.display()
+                ));
                 continue;
             }
-            // Only touch files belonging to this package (name substring match)
-            if !path.file_name().unwrap_or_default().to_string_lossy().contains(pkg_name)
-                && pkg_name != "*"
-            {
-                continue;
-            }
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                let mut new_content = content.clone();
-                let mut changed = false;
-                for line in content.lines() {
-                    if let Some(icon) = line.strip_prefix("Icon=") {
-                        let icon = icon.trim();
-                        if icon.is_empty() {
-                            continue;
-                        }
-                        // Check if icon file exists in any hicolor path
-                        let icon_exists = Path::new(icon).exists()
-                            || PathBuf::from(format!("/usr/share/icons/hicolor/48x48/apps/{}.png", icon)).exists()
-                            || PathBuf::from(format!("/usr/share/pixmaps/{}.png", icon)).exists()
-                            || PathBuf::from(format!("/usr/share/pixmaps/{}", icon)).exists();
-                        if !icon_exists {
-                            // Try to find a matching icon in hicolor
-                            let replacement = find_replacement_icon(icon);
-                            if let Some(repl) = replacement {
-                                new_content = new_content.replace(
-                                    &format!("Icon={}", icon),
-                                    &format!("Icon={}", repl),
-                                );
-                                changed = true;
-                                fixed.push(format!("{}: Icon={} -> {}", path.display(), icon, repl));
-                            }
-                        }
-                    }
-                }
-                if changed {
-                    // Need sudo to write; for now just report
-                    tracing::info!("Would fix {}", path.display());
-                }
+            if let Err(e) = std::fs::write(&path, new_content) {
+                fixed.push(format!("{}: write failed: {}", path.display(), e));
             }
         }
     }
@@ -306,20 +312,76 @@ pub fn fix_icons(pkg_name: &str) -> Result<Vec<String>> {
     Ok(fixed)
 }
 
-fn find_replacement_icon(_icon: &str) -> Option<String> {
-    // Look for any available icon that could serve as fallback
-    // For now, return None - a more sophisticated lookup could scan /usr/share/icons
+/// Check whether an icon name (or absolute path) resolves to a real file
+fn icon_exists(icon: &str) -> bool {
+    if icon.contains('/') {
+        return Path::new(icon).exists();
+    }
+    for dir in [
+        "/usr/share/icons/hicolor",
+        "/usr/share/icons/Adwaita",
+        "/usr/share/pixmaps",
+    ] {
+        for ext in ["png", "svg", "xpm"] {
+            if PathBuf::from(format!("{}/{}.{}", dir, icon, ext)).exists() {
+                return true;
+            }
+        }
+    }
+    // Sized hicolor subdirectories
+    for size in [
+        "16x16", "22x22", "24x24", "32x32", "48x48", "64x64", "128x128", "256x256", "scalable",
+    ] {
+        for sub in ["apps", "devices", "mimetypes"] {
+            for ext in ["png", "svg", "xpm"] {
+                if PathBuf::from(format!(
+                    "/usr/share/icons/hicolor/{}/{}/{}.{}",
+                    size, sub, icon, ext
+                ))
+                .exists()
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Find the closest available icon by name-prefix match
+fn find_replacement_icon(icon: &str) -> Option<String> {
+    let prefix = icon.split(['-', '_']).next().unwrap_or(icon);
+    if prefix.len() < 3 {
+        return None;
+    }
+    for dir in [
+        "/usr/share/pixmaps",
+        "/usr/share/icons/hicolor/48x48/apps",
+        "/usr/share/icons/hicolor/scalable/apps",
+    ] {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let fname = entry.file_name().to_string_lossy().to_string();
+                let stem = fname.split('.').next().unwrap_or("").to_string();
+                if stem != icon && stem.starts_with(prefix) {
+                    return Some(stem);
+                }
+            }
+        }
+    }
     None
 }
 
-/// Rename a rexeb-installed package entry (edits local DB `desc` if permissions allow)
+/// Record a rename alias for a rexeb-installed package
 ///
-/// This is a best-effort helper; the actual package file rename requires rebuilding.
+/// Mutating pacman's local DB directly would corrupt it, so this only records
+/// an alias for future conversions; actually renaming requires reconverting
+/// with `--name` and reinstalling.
 pub fn rename_installed(old_name: &str, new_name: &str) -> Result<()> {
     // For now, we provide guidance rather than mutating pacman DB directly
     // The user should reconvert with --name and reinstall
     tracing::info!(
-        "To rename '{}' to '{}', reconvert with: rexeb convert --name {} <package.deb> && sudo pacman -U <output>",
+        "To rename '{}' to '{}', reconvert with: rexeb convert --name {} <package> && sudo pacman -U <output>",
         old_name, new_name, new_name
     );
     // Record the alias in user mappings so future conversions use the new name

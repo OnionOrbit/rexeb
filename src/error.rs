@@ -18,6 +18,14 @@ pub enum RexebError {
     #[error("Failed to parse .deb package: {0}")]
     DebParsing(String),
 
+    /// Failed to parse an `.rpm` package
+    #[error("Failed to parse .rpm package: {0}")]
+    RpmParsing(String),
+
+    /// Failed to parse an AppImage
+    #[error("Failed to parse AppImage: {0}")]
+    AppImageParsing(String),
+
     /// Invalid control file syntax or content
     #[error("Invalid control file: {0}")]
     InvalidControl(String),
@@ -92,6 +100,10 @@ pub enum RexebError {
     /// HTTP request error
     #[error("HTTP request error: {0}")]
     Http(#[from] reqwest::Error),
+
+    /// Interactive prompt error
+    #[error("Prompt error: {0}")]
+    Dialoguer(#[from] dialoguer::Error),
 
     /// Catch-all for other uncategorized errors
     #[error("{0}")]

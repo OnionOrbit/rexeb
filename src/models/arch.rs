@@ -37,6 +37,24 @@ impl Architecture {
         }
     }
 
+    /// Convert from RPM architecture name to Arch Linux architecture
+    pub fn from_rpm(arch: &str) -> Result<Self> {
+        match arch.to_lowercase().as_str() {
+            "x86_64" | "amd64" | "x86-64" => Ok(Self::X86_64),
+            "i386" | "i486" | "i586" | "i686" | "x86" | "ix86" => Ok(Self::I686),
+            "aarch64" | "arm64" => Ok(Self::Aarch64),
+            "armv7hl" | "armv7hnl" | "armhfp" | "armhf" | "armv7l" => Ok(Self::Armv7h),
+            "noarch" | "any" | "all" => Ok(Self::Any),
+            "src" | "nosrc" => Err(RexebError::InvalidArchitecture(
+                "Source RPMs (.src.rpm) cannot be converted — build or download the binary RPM instead".into(),
+            )),
+            _ => Err(RexebError::InvalidArchitecture(format!(
+                "Unknown RPM architecture: {}",
+                arch
+            ))),
+        }
+    }
+
     /// Get the Arch Linux architecture name
     pub fn to_arch_name(&self) -> &'static str {
         match self {

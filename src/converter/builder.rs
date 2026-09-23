@@ -24,13 +24,19 @@ pub struct PackageConverter {
     data_dir: PathBuf,
     /// Optional sandbox for isolated builds
     sandbox: Option<NspawnSandbox>,
+    /// Overwrite an existing output file (from `--force`)
+    overwrite: bool,
+    /// Strip ELF binaries after staging (from config `strip_binaries`)
+    strip_binaries: bool,
+    /// Original source filename (for the provenance sentinel)
+    source_file: Option<String>,
 }
 
 impl PackageConverter {
     /// Create a new package converter
     pub fn new(metadata: PackageMetadata, data_dir: impl AsRef<Path>) -> Result<Self> {
         let data_dir = data_dir.as_ref().to_path_buf();
-        
+
         if !data_dir.exists() {
             return Err(RexebError::file_not_found(&data_dir));
         }
@@ -39,6 +45,9 @@ impl PackageConverter {
             metadata,
             data_dir,
             sandbox: None,
+            overwrite: false,
+            strip_binaries: false,
+            source_file: None,
         })
     }
 
@@ -50,24 +59,54 @@ impl PackageConverter {
         Ok(self)
     }
 
+    /// Allow overwriting an existing output file (default: refuse)
+    pub fn with_overwrite(mut self, overwrite: bool) -> Self {
+        self.overwrite = overwrite;
+        self
+    }
+
+    /// Strip ELF binaries after staging (default: off)
+    pub fn with_strip_binaries(mut self, strip: bool) -> Self {
+        self.strip_binaries = strip;
+        self
+    }
+
+    /// Record the original source filename for provenance tracking
+    pub fn with_source_file(mut self, name: impl Into<String>) -> Self {
+        self.source_file = Some(name.into());
+        self
+    }
+
+    /// File name of the package this metadata + format would produce
+    ///
+    /// Shared by `build()` and `--dry-run` so the previewed name always
+    /// matches the real artifact.
+    pub fn package_file_name(metadata: &PackageMetadata, format: OutputFormat) -> String {
+        format!(
+            "{}-{}-{}.{}.{}",
+            metadata.effective_name(),
+            metadata.version,
+            metadata.release,
+            metadata.arch.to_arch_name(),
+            format.extension()
+        )
+    }
+
     /// Build the Arch Linux package
     pub fn build(&self, output_dir: &Path, format: OutputFormat) -> Result<PathBuf> {
-        let package_name = format!(
-            "{}-{}-{}.{}",
-            self.metadata.effective_name(),
-            self.metadata.version,
-            self.metadata.release,
-            self.metadata.arch.to_arch_name()
-        );
+        std::fs::create_dir_all(output_dir)?;
 
-        let output_path = output_dir.join(format!("{}.{}", package_name, format.extension()));
+        let output_path = output_dir.join(Self::package_file_name(&self.metadata, format));
+        if output_path.exists() && !self.overwrite {
+            return Err(RexebError::PackageBuild(format!(
+                "Output {} already exists (use --force to overwrite)",
+                output_path.display()
+            )));
+        }
 
         // Create temporary directory for package contents
-        let temp_dir = tempfile::TempDir::new()?;
+        let temp_dir = tempfile::Builder::new().prefix("rexeb-").tempdir()?;
         let pkg_root = temp_dir.path();
-
-        // Create .BUILDINFO
-        self.create_buildinfo(pkg_root)?;
 
         // Create .PKGINFO
         self.create_pkginfo(pkg_root)?;
@@ -77,6 +116,19 @@ impl PackageConverter {
 
         // Copy data files
         self.copy_data_files(pkg_root)?;
+
+        // Optionally strip ELF binaries (best effort)
+        if self.strip_binaries {
+            self.strip_elf_binaries(pkg_root)?;
+        }
+
+        // Write the .rexeb.json provenance sentinel so `list-installed`
+        // can find this package even if pacman drops unknown PKGINFO keys
+        self.create_sentinel(pkg_root)?;
+
+        // Create .BUILDINFO (after staging: pkgbuild_sha256sum covers the
+        // actual staged content)
+        self.create_buildinfo(pkg_root)?;
 
         // Create .MTREE (file metadata tree) - MUST be after all files are in place
         self.create_mtree(pkg_root)?;
@@ -90,13 +142,13 @@ impl PackageConverter {
     /// Create .BUILDINFO file
     fn create_buildinfo(&self, pkg_root: &Path) -> Result<()> {
         let buildinfo_path = pkg_root.join(".BUILDINFO");
-        let content = self.generate_buildinfo();
+        let content = self.generate_buildinfo(pkg_root);
         fs::write(buildinfo_path, content)?;
         Ok(())
     }
 
     /// Generate .BUILDINFO content
-    fn generate_buildinfo(&self) -> String {
+    fn generate_buildinfo(&self, pkg_root: &Path) -> String {
         let mut lines = Vec::new();
 
         lines.push("format = 2".to_string());
@@ -105,15 +157,13 @@ impl PackageConverter {
         lines.push(format!("pkgver = {}", self.metadata.full_version()));
         lines.push(format!("pkgarch = {}", self.metadata.arch.to_arch_name()));
 
-        // Generate a simple SHA256 based on package name and version for consistency
-        use sha2::{Sha256, Digest};
-        let hash_input = format!("{}:{}", self.metadata.effective_name(), self.metadata.full_version());
-        let hash = Sha256::new().chain_update(hash_input).finalize();
-        let hash_hex = hex::encode(hash);
-        lines.push(format!("pkgbuild_sha256sum = {}", &hash_hex[..32])); // Truncate to reasonable length
+        // Hash of the actual staged content (sorted path/size/digest lines),
+        // so identical conversions produce identical checksums
+        let tree_hash = staged_tree_hash(pkg_root).unwrap_or_else(|_| "0".repeat(64));
+        lines.push(format!("pkgbuild_sha256sum = {}", &tree_hash[..32.min(tree_hash.len())]));
 
         lines.push(format!("packager = {} (converted by rexeb)", self.metadata.maintainer.as_deref().unwrap_or("Unknown")));
-        lines.push(format!("builddate = {}", chrono::Utc::now().timestamp()));
+        lines.push(format!("builddate = {}", crate::build_timestamp()));
         lines.push("builddir = /tmp/rexeb".to_string());
         lines.push("startdir = /tmp/rexeb".to_string());
         lines.push("buildtool = rexeb".to_string());
@@ -122,7 +172,11 @@ impl PackageConverter {
         lines.push("buildenv = !ccache".to_string());
         lines.push("buildenv = !check".to_string());
         lines.push("buildenv = !sign".to_string());
-        lines.push("options = !strip".to_string()); // Converted packages typically preserve original stripping
+        if self.strip_binaries {
+            lines.push("options = strip".to_string());
+        } else {
+            lines.push("options = !strip".to_string()); // Converted packages typically preserve original stripping
+        }
         lines.push("options = !docs".to_string());
         lines.push("options = !libtool".to_string());
         lines.push("options = !staticlibs".to_string());
@@ -175,7 +229,7 @@ impl PackageConverter {
                 }
 
                 let path_str = rel_path.to_string_lossy();
-                
+
                 // Skip special files (already handled above)
                 if path_str.starts_with(".BUILDINFO")
                     || path_str.starts_with(".PKGINFO")
@@ -185,17 +239,11 @@ impl PackageConverter {
                     continue;
                 }
 
-                let metadata = entry.metadata()?;
-
-                let file_type = if metadata.is_dir() {
-                    "dir"
-                } else if metadata.is_file() {
-                    "file"
-                } else if metadata.file_type().is_symlink() {
-                    "link"
-                } else {
-                    continue;
-                };
+                // Use the link itself, not its target: `metadata()` follows
+                // symlinks, so a symlink-to-dir was previously recorded as a
+                // directory (and symlink-to-file hashed as a file).
+                let file_type = entry.file_type();
+                let metadata = std::fs::symlink_metadata(entry.path())?;
 
                 #[cfg(unix)]
                 let mode = {
@@ -203,27 +251,26 @@ impl PackageConverter {
                     metadata.permissions().mode() & 0o7777
                 };
                 #[cfg(not(unix))]
-                let mode = if metadata.is_dir() { 755 } else { 644 };
+                let mode = if file_type.is_dir() { 755 } else { 644 };
 
-                if metadata.is_dir() {
+                if file_type.is_dir() {
                     mtree_content.push_str(&format!(
-                        "./{} time=0 mode={:o} type={}\n",
-                        path_str, mode, file_type
+                        "./{} time=0 mode={:o} type=dir\n",
+                        path_str, mode
                     ));
-                } else if metadata.is_file() {
+                } else if file_type.is_symlink() {
+                    if let Ok(target) = std::fs::read_link(entry.path()) {
+                        mtree_content.push_str(&format!(
+                            "./{} time=0 mode={:o} type=link link={}\n",
+                            path_str, mode, target.display()
+                        ));
+                    }
+                } else if file_type.is_file() {
                     let size = metadata.len();
                     if let Ok(hash_hex) = file_sha256(entry.path()) {
                         mtree_content.push_str(&format!(
-                            "./{} time=0 size={} mode={:o} type={} sha256digest={}\n",
-                            path_str, size, mode, file_type, hash_hex
-                        ));
-                    }
-                } else if metadata.file_type().is_symlink() {
-                    #[cfg(unix)]
-                    if let Ok(target) = std::fs::read_link(entry.path()) {
-                        mtree_content.push_str(&format!(
-                            "./{} time=0 mode={:o} type={} link={}\n",
-                            path_str, mode, file_type, target.display()
+                            "./{} time=0 size={} mode={:o} type=file sha256digest={}\n",
+                            path_str, size, mode, hash_hex
                         ));
                     }
                 }
@@ -253,58 +300,33 @@ impl PackageConverter {
 
     /// Copy data files to package root
     fn copy_data_files(&self, pkg_root: &Path) -> Result<()> {
-        // When sandbox is enabled, copy data through the sandbox for isolation
         if let Some(ref sandbox) = self.sandbox {
-            let sandbox_data = Path::new("/rexeb-data");
-            sandbox.copy_in(&self.data_dir, sandbox_data)?;
-
-            // Now copy from sandbox to package root
-            for entry in walkdir::WalkDir::new(&self.data_dir) {
-                let entry = entry?;
-                let source = entry.path();
-                
-                if let Ok(rel_path) = source.strip_prefix(&self.data_dir) {
-                    if rel_path.as_os_str().is_empty() {
-                        continue;
-                    }
-
-                    let dest = pkg_root.join(rel_path);
-                    
-                    if entry.file_type().is_dir() {
-                        fs::create_dir_all(&dest)?;
-                    } else if entry.file_type().is_file() {
-                        if let Some(parent) = dest.parent() {
-                            fs::create_dir_all(parent)?;
-                        }
-                        fs::copy(source, &dest)?;
-                    } else if entry.file_type().is_symlink() {
-                        #[cfg(unix)]
-                        {
-                            let target = fs::read_link(source)?;
-                            if dest.exists() || dest.symlink_metadata().is_ok() {
-                                fs::remove_file(&dest)?;
-                            }
-                            std::os::unix::fs::symlink(target, &dest)?;
-                        }
-                    }
-                }
-            }
-
-            return Ok(());
+            // Stage a copy inside the sandbox root for inspection. NOTE: this
+            // is not full isolation (archive assembly still runs on the
+            // host); `--sandbox` remains experimental until the build itself
+            // executes inside nspawn.
+            sandbox.copy_in(&self.data_dir, Path::new("/rexeb-data"))?;
+            tracing::warn!(
+                "--sandbox is experimental: files are staged through the sandbox, \
+                 but archive assembly still runs on the host"
+            );
         }
+        Self::copy_tree(&self.data_dir, pkg_root)
+    }
 
-        // Direct copy (no sandbox)
-        for entry in walkdir::WalkDir::new(&self.data_dir) {
+    /// Recursively copy a tree, preserving symlinks
+    fn copy_tree(src_root: &Path, dst_root: &Path) -> Result<()> {
+        for entry in walkdir::WalkDir::new(src_root) {
             let entry = entry?;
             let source = entry.path();
-            
-            if let Ok(rel_path) = source.strip_prefix(&self.data_dir) {
+
+            if let Ok(rel_path) = source.strip_prefix(src_root) {
                 if rel_path.as_os_str().is_empty() {
                     continue;
                 }
 
-                let dest = pkg_root.join(rel_path);
-                
+                let dest = dst_root.join(rel_path);
+
                 if entry.file_type().is_dir() {
                     fs::create_dir_all(&dest)?;
                 } else if entry.file_type().is_file() {
@@ -328,7 +350,75 @@ impl PackageConverter {
         Ok(())
     }
 
+    /// Write the `.rexeb.json` provenance sentinel into the package
+    ///
+    /// Installed to `usr/share/doc/<pkg>/` so `list-installed` keeps working
+    /// even when pacman drops the unknown `x-rexeb` keys from `.PKGINFO`.
+    fn create_sentinel(&self, pkg_root: &Path) -> Result<()> {
+        let source = self.source_file.clone().unwrap_or_else(|| {
+            self.metadata.name.clone()
+        });
+        let watermark = crate::watermark::Watermark::new(
+            &source,
+            self.metadata.effective_name(),
+            &self.metadata.full_version(),
+            self.metadata.arch.to_arch_name(),
+        );
+        match watermark.to_json() {
+            Ok(json) => {
+                let dir = pkg_root
+                    .join("usr/share/doc")
+                    .join(self.metadata.effective_name());
+                std::fs::create_dir_all(&dir)?;
+                std::fs::write(dir.join(".rexeb.json"), json)?;
+            }
+            Err(e) => {
+                tracing::warn!("Could not serialize watermark sentinel: {}", e);
+            }
+        }
+        Ok(())
+    }
+
+    /// Strip ELF binaries in the staged tree (best effort)
+    ///
+    /// Only files with an ELF magic header are touched; a missing `strip`
+    /// binary (or a per-file failure) is logged, never fatal.
+    fn strip_elf_binaries(&self, pkg_root: &Path) -> Result<()> {
+        for entry in walkdir::WalkDir::new(pkg_root) {
+            let entry = entry?;
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let path = entry.path();
+            if !is_elf(path) {
+                continue;
+            }
+            match std::process::Command::new("strip")
+                .arg("--strip-unneeded")
+                .arg(path)
+                .output()
+            {
+                Ok(output) if output.status.success() => {}
+                Ok(output) => {
+                    tracing::debug!(
+                        "strip failed for {}: {}",
+                        path.display(),
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("`strip` not available ({}); skipping binary stripping", e);
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Create the compressed tar archive
+    ///
+    /// Encoders are explicitly finished and the writer flushed so I/O errors
+    /// (e.g. disk full) surface here instead of being swallowed by `Drop`.
     fn create_archive(&self, output: &Path, pkg_root: &Path, format: OutputFormat) -> Result<()> {
         let file = File::create(output)?;
         let buf_writer = BufWriter::new(file);
@@ -336,18 +426,27 @@ impl PackageConverter {
         match format {
             OutputFormat::PkgTarZst => {
                 let encoder = zstd::Encoder::new(buf_writer, 19)?;
-                let mut tar = TarBuilder::new(encoder.auto_finish());
+                let mut tar = TarBuilder::new(encoder);
                 self.add_package_files(&mut tar, pkg_root)?;
+                let encoder = tar.into_inner()?;
+                let mut writer = encoder.finish()?;
+                writer.flush()?;
             }
             OutputFormat::PkgTarXz => {
                 let encoder = xz2::write::XzEncoder::new(buf_writer, 6);
                 let mut tar = TarBuilder::new(encoder);
                 self.add_package_files(&mut tar, pkg_root)?;
+                let encoder = tar.into_inner()?;
+                let mut writer = encoder.finish()?;
+                writer.flush()?;
             }
             OutputFormat::PkgTarGz => {
                 let encoder = flate2::write::GzEncoder::new(buf_writer, flate2::Compression::default());
                 let mut tar = TarBuilder::new(encoder);
                 self.add_package_files(&mut tar, pkg_root)?;
+                let encoder = tar.into_inner()?;
+                let mut writer = encoder.finish()?;
+                writer.flush()?;
             }
         }
 
@@ -417,17 +516,19 @@ impl PackageConverter {
         header.set_uid(0);
         header.set_gid(0);
         header.set_mtime(metadata.modified()?.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs());
-        
+
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            header.set_mode(metadata.permissions().mode());
+            // Mask off file-type bits: Permissions::mode() returns the full
+            // st_mode, but tar wants permission bits only.
+            header.set_mode(metadata.permissions().mode() & 0o7777);
         }
         #[cfg(not(unix))]
         {
             header.set_mode(0o644);
         }
-        
+
         header.set_entry_type(tar::EntryType::Regular);
         header.set_cksum();
         
@@ -451,17 +552,17 @@ impl PackageConverter {
         header.set_uid(0);
         header.set_gid(0);
         header.set_mtime(metadata.modified()?.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs());
-        
+
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            header.set_mode(metadata.permissions().mode());
+            header.set_mode(metadata.permissions().mode() & 0o7777);
         }
         #[cfg(not(unix))]
         {
             header.set_mode(0o755);
         }
-        
+
         header.set_entry_type(tar::EntryType::Directory);
         header.set_cksum();
         
@@ -500,6 +601,48 @@ impl PackageConverter {
         
         Ok(())
     }
+}
+
+/// Check for an ELF magic header (used to select stripping candidates)
+fn is_elf(path: &Path) -> bool {
+    if let Ok(mut file) = File::open(path) {
+        let mut magic = [0u8; 4];
+        if file.read_exact(&mut magic).is_ok() {
+            return magic == [0x7f, b'E', b'L', b'F'];
+        }
+    }
+    false
+}
+
+/// Hash the staged tree: SHA256 over sorted `path\0size\0digest\0` records
+///
+/// `.BUILDINFO` itself is excluded (it does not exist yet when this runs),
+/// everything else — including `.PKGINFO` and the sentinel — is covered.
+fn staged_tree_hash(pkg_root: &Path) -> Result<String> {
+    let mut records: Vec<String> = Vec::new();
+    for entry in walkdir::WalkDir::new(pkg_root) {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let rel = entry
+            .path()
+            .strip_prefix(pkg_root)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if rel == ".BUILDINFO" {
+            continue;
+        }
+        let size = entry.metadata()?.len();
+        let digest = file_sha256(entry.path())?;
+        records.push(format!("{}\0{}\0{}\0", rel, size, digest));
+    }
+    records.sort();
+    let mut hasher = Sha256::new();
+    for record in &records {
+        hasher.update(record.as_bytes());
+    }
+    Ok(hex::encode(hasher.finalize()))
 }
 
 /// Compute SHA256 digest of a file using streaming reads (memory-efficient)

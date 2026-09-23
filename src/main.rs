@@ -38,35 +38,46 @@ async fn main() -> ExitCode {
     }
 }
 
-/// Set up logging based on CLI arguments
+/// Set up logging based on CLI arguments (falling back to the config file)
 fn setup_logging(cli: &Cli) {
-    let level = if cli.verbose {
+    let config = rexeb::config::Config::load().unwrap_or_default();
+    let level: &str = if cli.verbose {
         "debug"
     } else if cli.quiet {
         "error"
     } else {
-        "info"
+        config.logging.level.as_str()
     };
 
+    // RUST_LOG wins when set; a bogus configured level falls back to info
+    // instead of panicking inside EnvFilter::new.
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(level));
+        .unwrap_or_else(|_| EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info")));
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)
         .without_time()
+        .with_ansi(config.logging.color && !cli.quiet)
         .init();
 }
 
 /// Main application logic
 async fn run(cli: Cli) -> Result<()> {
+    // Honor --config everywhere by bridging it into REXEB_CONFIG, which
+    // Config::config_path() consults (clap only reads the env var, so an
+    // explicit flag would otherwise be ignored by every Config::load()).
+    if let Some(ref config_path) = cli.config {
+        std::env::set_var("REXEB_CONFIG", config_path);
+    }
+
     // Show banner for main commands (not quiet mode)
     if !cli.quiet {
         match &cli.command {
             Commands::Convert(_) | Commands::Install(_) => {
                 println!("{}", style(BANNER).cyan());
-                println!("  {} v{}\n", 
-                    style("rexeb").bold(), 
+                println!("  {} v{}\n",
+                    style("rexeb").bold(),
                     style(rexeb::VERSION).dim()
                 );
             }
@@ -74,68 +85,82 @@ async fn run(cli: Cli) -> Result<()> {
         }
     }
 
-    // Set number of parallel jobs with low-RAM / low-core safety caps
-    let effective_jobs = cli.jobs.unwrap_or_else(|| {
-        // Check available memory: if < 1GB, cap to 1-2 jobs to avoid OOM on 2GB devices
-        let mem_mb = read_mem_available_mb().unwrap_or(4096);
-        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
-        if mem_mb < 1024 {
-            tracing::warn!("Low memory detected ({} MB) — capping parallel jobs", mem_mb);
-            1
-        } else if cores <= 2 {
-            // Dual-core / i3-like: don't saturate both cores
-            2.min(cores)
-        } else {
-            // Cap to half cores on low-end, leave headroom for the system
-            (cores / 2).max(2).min(4)
-        }
-    });
+    // Set number of parallel jobs (--jobs > config > low-RAM/low-core caps)
+    let config_jobs = rexeb::config::Config::load()
+        .ok()
+        .and_then(|c| c.general.jobs);
+    let effective_jobs = rexeb::effective_parallel_jobs(cli.jobs.or(config_jobs));
     rayon::ThreadPoolBuilder::new()
         .num_threads(effective_jobs)
         .build_global()
         .ok();
     tracing::debug!("Using {} parallel jobs", effective_jobs);
 
-    // Handle TUI mode
+    // Handle TUI mode: run the real conversion with progress reporting
     #[cfg(feature = "tui")]
     if cli.tui {
-        use rexeb::tui::{App, ProgressEvent, run_tui};
+        use rexeb::tui::{run_tui, App, ProgressEvent};
         use tokio::sync::mpsc;
 
-        let app = App::new();
-        let tick_rate = std::time::Duration::from_millis(250);
-        let (tx, rx) = mpsc::channel::<ProgressEvent>(64);
+        match &cli.command {
+            Commands::Convert(args) => {
+                let app = App::new();
+                let tick_rate = std::time::Duration::from_millis(250);
+                let (tx, rx) = mpsc::channel::<ProgressEvent>(64);
+                let convert_args = args.clone();
 
-        // Spawn the convert task with progress reporting
-        let tx_clone = tx.clone();
-        tokio::spawn(async move {
-            // For now, demonstrate TUI with a simple test workflow.
-            // A full integration would parse the CLI args and run the convert flow here.
-            let _ = tx_clone.send(ProgressEvent::Status("Starting conversion...".into())).await;
-            let _ = tx_clone.send(ProgressEvent::Log("rexeb TUI mode active".into())).await;
-            let _ = tx_clone.send(ProgressEvent::Log("Use this mode for real-time conversion monitoring".into())).await;
-            
-            for i in 0..=10 {
-                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                let pct = i as f64 / 10.0;
-                let _ = tx_clone.send(ProgressEvent::Progress(pct)).await;
-                let _ = tx_clone.send(ProgressEvent::Log(format!("Step {}/10 complete", i))).await;
+                tokio::spawn(async move {
+                    let total = convert_args.input.len().max(1);
+                    let _ = tx
+                        .send(ProgressEvent::Status("Starting conversion...".into()))
+                        .await;
+                    for (i, input) in convert_args.input.iter().enumerate() {
+                        let _ = tx
+                            .send(ProgressEvent::Log(format!("Converting {} ...", input.display())))
+                            .await;
+                        let single = rexeb::cli::ConvertArgs {
+                            input: vec![input.clone()],
+                            ..convert_args.clone()
+                        };
+                        match rexeb::cli::execute_convert(&single, true, None).await {
+                            Ok(()) => {
+                                let _ = tx
+                                    .send(ProgressEvent::Log(format!("Done: {}", input.display())))
+                                    .await;
+                            }
+                            Err(e) => {
+                                let _ = tx.send(ProgressEvent::Error(e.to_string())).await;
+                                return;
+                            }
+                        }
+                        let _ = tx
+                            .send(ProgressEvent::Progress((i + 1) as f64 / total as f64))
+                            .await;
+                    }
+                    let _ = tx.send(ProgressEvent::Done).await;
+                });
+
+                run_tui(app, tick_rate, rx).await?;
+                return Ok(());
             }
-            
-            let _ = tx_clone.send(ProgressEvent::Done).await;
-        });
+            _ => {
+                eprintln!("--tui currently supports only the `convert` command; running normally.");
+            }
+        }
+    }
 
-        run_tui(app, tick_rate, rx).await?;
-        return Ok(());
+    #[cfg(not(feature = "tui"))]
+    if cli.tui {
+        eprintln!("Warning: --tui was passed but rexeb was built without the `tui` feature; ignoring.");
     }
 
     // Dispatch to appropriate command handler
     match cli.command {
         Commands::Convert(args) => {
-            cli::execute_convert(&args).await
+            cli::execute_convert(&args, cli.quiet, cli.jobs).await
         }
         Commands::Update(args) => {
-            cli::execute_update(&args).await
+            cli::execute_update(&args, cli.quiet).await
         }
         Commands::Info(args) => {
             cli::execute_info(&args).await
@@ -147,7 +172,7 @@ async fn run(cli: Cli) -> Result<()> {
             cli::execute_analyze(&args).await
         }
         Commands::Install(args) => {
-            cli::execute_install(&args).await
+            cli::execute_install(&args, cli.quiet).await
         }
         Commands::Config(args) => {
             cli::execute_config(&args).await
@@ -173,34 +198,16 @@ async fn run(cli: Cli) -> Result<()> {
         Commands::SelfUpdate(args) => {
             cli::execute_self_update(&args).await
         }
-    }
-}
-
-/// Read available memory in MB from /proc/meminfo (Linux), with fallback
-fn read_mem_available_mb() -> Option<u64> {
-    let content = std::fs::read_to_string("/proc/meminfo").ok()?;
-    for line in content.lines() {
-        if line.starts_with("MemAvailable:") {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                if let Ok(kb) = parts[1].parse::<u64>() {
-                    return Some(kb / 1024);
-                }
-            }
+        Commands::Completions(args) => {
+            cli::execute_completions(&args).await
+        }
+        Commands::Manpage(args) => {
+            cli::execute_manpage(&args).await
+        }
+        Commands::SandboxBuild(args) => {
+            cli::execute_sandbox_build(&args)
         }
     }
-    // Fallback to MemFree if MemAvailable not present (older kernels)
-    for line in content.lines() {
-        if line.starts_with("MemFree:") {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                if let Ok(kb) = parts[1].parse::<u64>() {
-                    return Some(kb / 1024);
-                }
-            }
-        }
-    }
-    None
 }
 
 #[cfg(test)]

@@ -5,38 +5,103 @@ use std::path::Path;
 use crate::error::Result;
 
 /// Execute the convert command
-pub async fn execute_convert(args: &super::ConvertArgs) -> Result<()> {
-    use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+pub async fn execute_convert(
+    args: &super::ConvertArgs,
+    quiet: bool,
+    jobs: Option<usize>,
+) -> Result<()> {
+    use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+
+    let config = crate::config::Config::load().unwrap_or_default();
+    let output_dir = args
+        .output
+        .clone()
+        .or(config.general.output_dir.clone())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+    std::fs::create_dir_all(&output_dir)?;
+
+    // No inputs: interactive picker on a TTY, hard error otherwise
+    let promptable = super::interactive::is_promptable(args.yes, quiet);
+    let inputs: Vec<std::path::PathBuf> = if args.input.is_empty() {
+        if promptable {
+            super::interactive::pick_input_files()?
+        } else {
+            return Err(crate::error::RexebError::Validation(
+                "No input files given".into(),
+            ));
+        }
+    } else {
+        args.input.clone()
+    };
 
     let multi = MultiProgress::new();
+    if quiet || promptable {
+        // Prompts and progress bars fight over the terminal; when prompts
+        // may appear, conversions print plain status lines instead.
+        multi.set_draw_target(ProgressDrawTarget::hidden());
+    }
     let style = ProgressStyle::with_template(
         "{prefix:.bold.dim} [{bar:40.cyan/blue}] {pos}/{len} {msg}"
     )
     .unwrap()
     .progress_chars("█▓▒░ ");
 
-    let output_dir = args.output.clone().unwrap_or_else(|| std::env::current_dir().unwrap());
-    
+    // Bound concurrency: each conversion does heavy blocking work
+    // (extraction, hashing, zstd-19), so unbounded spawns would starve the
+    // runtime and OOM small devices. Prompting conversions run strictly
+    // serially so only one task ever owns stdin.
+    let permits = if promptable {
+        1
+    } else {
+        crate::effective_parallel_jobs(jobs.or(config.general.jobs))
+    };
+    let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(permits));
+
     // Process packages using tasks since we're async now
     let mut handles = Vec::new();
-    
-    for input_path in &args.input {
+
+    for input_path in &inputs {
+        let permit = sem
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|e| crate::error::RexebError::Other(e.to_string()))?;
         let input_path = input_path.clone();
         let output_dir = output_dir.clone();
         let args_clone = args.clone();
-        
+
         let pb = multi.add(ProgressBar::new(100));
         pb.set_style(style.clone());
         pb.set_prefix(format!("{}", input_path.file_name().unwrap_or_default().to_string_lossy()));
-        
+
         handles.push(tokio::spawn(async move {
-            convert_single_package(&input_path, &output_dir, &args_clone, pb).await
+            let _permit = permit;
+            convert_single_package(&input_path, &output_dir, &args_clone, pb, quiet).await
         }));
     }
 
-    // Wait for all tasks
+    // Wait for all tasks, collecting every failure instead of aborting on
+    // the first one while siblings keep running detached.
+    let total = handles.len();
+    let mut failed = 0usize;
     for handle in handles {
-        handle.await.map_err(|e| crate::error::RexebError::Other(e.to_string()))??;
+        match handle.await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                eprintln!("Error: {}", e);
+                failed += 1;
+            }
+            Err(e) => {
+                eprintln!("Task failed: {}", e);
+                failed += 1;
+            }
+        }
+    }
+    if failed > 0 {
+        return Err(crate::error::RexebError::Other(format!(
+            "{}/{} conversions failed",
+            failed, total
+        )));
     }
 
     Ok(())
@@ -48,15 +113,32 @@ async fn convert_single_package(
     output_dir: &Path,
     args: &super::ConvertArgs,
     pb: indicatif::ProgressBar,
+    quiet: bool,
 ) -> Result<()> {
     use crate::converter::PackageConverter;
-    use crate::parsers::deb::DebParser;
+    use crate::models::DependencyType;
 
+    // CLI flags win; config file supplies the defaults
+    let config = crate::config::Config::load().unwrap_or_default();
+    let skip_deps = args.skip_deps || config.conversion.skip_deps;
+    let keep_temp = args.keep_temp || config.conversion.keep_temp;
+    let gen_pkgbuild = args.pkgbuild || config.conversion.generate_pkgbuild;
+    let strip = config.conversion.strip_binaries;
+    let format = args
+        .format
+        .or_else(|| super::OutputFormat::from_config_str(&config.conversion.default_format))
+        .unwrap_or(super::OutputFormat::PkgTarZst);
+    let promptable = super::interactive::is_promptable(args.yes, quiet);
+
+    if promptable {
+        // Progress bars are hidden in this mode; plain lines are the UI
+        println!("Converting {} ...", input.display());
+    }
     pb.set_message("Parsing package...");
     pb.set_position(10);
 
-    // Parse the deb package
-    let parser = DebParser::new(input)?;
+    // Parse the input package (auto-detected: .deb, .rpm, .AppImage)
+    let parser = crate::parsers::detect_and_create(input)?;
     let mut metadata = parser.parse()?;
 
     pb.set_position(30);
@@ -73,14 +155,27 @@ async fn convert_single_package(
         metadata.release = release.clone();
     }
 
+    // Experimental 32-bit compat mode (debtap-style --pseudo-64-bit)
+    if args.pseudo64 {
+        if metadata.arch == crate::models::Architecture::I686 {
+            tracing::warn!("--pseudo64: treating i386 package as x86_64 (experimental)");
+            metadata.arch = crate::models::Architecture::X86_64;
+        } else {
+            tracing::warn!(
+                "--pseudo64 only affects 32-bit (i386) packages; ignoring for {}",
+                metadata.arch
+            );
+        }
+    }
+
     // Normalize version
     metadata.normalize_version();
 
     pb.set_position(40);
 
-    // Resolve dependencies if not skipped
+    // Resolve dependencies if not skipped (also prunes self-references)
     let resolver = crate::resolver::DependencyResolver::new()?;
-    if !args.skip_deps {
+    if !skip_deps {
         resolver.resolve(&mut metadata).await?;
     }
 
@@ -96,47 +191,372 @@ async fn convert_single_package(
         ));
     }
 
+    // Unmapped hard dependencies would silently vanish from the package —
+    // review them with the user when possible, warn loudly otherwise.
+    if !skip_deps {
+        let unmapped: Vec<String> = [DependencyType::Depends, DependencyType::PreDepends]
+            .iter()
+            .flat_map(|t| metadata.get_deps(*t))
+            .filter(|d| !d.is_mapped())
+            .map(|d| d.debian_name.clone())
+            .collect();
+        let soft_unmapped = [DependencyType::Recommends, DependencyType::Suggests]
+            .iter()
+            .flat_map(|t| metadata.get_deps(*t))
+            .filter(|d| !d.is_mapped())
+            .count();
+        if !unmapped.is_empty() {
+            if promptable {
+                super::interactive::review_unmapped_dependencies(&mut metadata).await?;
+            } else {
+                tracing::warn!(
+                    "{} unmapped dependencies will be dropped from {}: {}",
+                    unmapped.len(),
+                    metadata.effective_name(),
+                    unmapped.join(", ")
+                );
+            }
+        }
+        if soft_unmapped > 0 {
+            tracing::warn!(
+                "{} unmapped optional dependencies will be dropped from {}",
+                soft_unmapped,
+                metadata.effective_name()
+            );
+        }
+    }
+
     pb.set_position(60);
     pb.set_message("Building package...");
 
-    // Create output package
-    if args.pkgbuild {
-        // Generate PKGBUILD
-        let pkgbuild_path = output_dir.join("PKGBUILD");
-        std::fs::write(&pkgbuild_path, metadata.to_pkgbuild())?;
+    if args.dry_run {
+        print_dry_run_plan(input, output_dir, &metadata, format, gen_pkgbuild, skip_deps);
         pb.set_position(100);
-        pb.finish_with_message(format!("Created {}", pkgbuild_path.display()));
+        pb.finish_with_message("Dry run complete");
+        return Ok(());
+    }
+
+    if args.interactive && promptable {
+        let file_name = PackageConverter::package_file_name(&metadata, format);
+        let question = if gen_pkgbuild {
+            format!(
+                "Generate PKGBUILD in {}/{}?",
+                output_dir.display(),
+                metadata.effective_name()
+            )
+        } else {
+            format!("Build {}?", output_dir.join(&file_name).display())
+        };
+        if !super::interactive::confirm_proceed(&question)? {
+            return Err(crate::error::RexebError::Validation(
+                "Conversion aborted by user".into(),
+            ));
+        }
+    }
+
+    // Create output package
+    if gen_pkgbuild {
+        // Per-package directory: batch conversions would otherwise race on
+        // a single shared PKGBUILD path
+        let dir = output_dir.join(metadata.effective_name());
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(dir.join("PKGBUILD"), metadata.to_pkgbuild())?;
+        std::fs::write(dir.join(".SRCINFO"), generate_srcinfo(&metadata))?;
+        pb.set_position(100);
+        pb.finish_with_message(format!("Created {}/PKGBUILD", dir.display()));
+        if promptable {
+            println!("Created {}/PKGBUILD", dir.display());
+        }
     } else {
         // Build binary package
-        let mut converter = PackageConverter::new(metadata, parser.extract_dir())?;
+        let source_name = input
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("package")
+            .to_string();
 
-        // Optionally enable sandboxed build
-        if args.sandbox {
-            let sandbox_root = tempfile::TempDir::new()?.keep();
-            converter = converter.with_sandbox(&sandbox_root)?;
-            pb.set_message("Building in sandbox...");
+        // Sandbox backend: bubblewrap isolates the build, nspawn stages
+        // files through a container (auto prefers bubblewrap)
+        let backend = args
+            .sandbox_backend
+            .unwrap_or(super::SandboxBackendArg::Auto);
+        let isolated = if args.sandbox {
+            match backend {
+                super::SandboxBackendArg::Bwrap => {
+                    if !crate::sandbox::bwrap_available() {
+                        return Err(crate::error::RexebError::PackageBuild(
+                            "bubblewrap (bwrap) not found — install bubblewrap or use --sandbox-backend nspawn".into(),
+                        ));
+                    }
+                    true
+                }
+                super::SandboxBackendArg::Nspawn => false,
+                super::SandboxBackendArg::Auto => {
+                    let available = crate::sandbox::bwrap_available();
+                    if !available {
+                        tracing::warn!(
+                            "bubblewrap not found — falling back to nspawn staging (not full isolation)"
+                        );
+                    }
+                    available
+                }
+            }
+        } else {
+            false
+        };
+
+        // Computed before `metadata` moves into the isolated manifest
+        let expected = output_dir.join(PackageConverter::package_file_name(&metadata, format));
+
+        let output_path;
+        if isolated {
+            pb.set_message("Building isolated (bubblewrap)...");
+            output_path = crate::sandbox::run_isolated_build(crate::sandbox::IsolatedBuild {
+                metadata,
+                host_data_dir: parser.extract_dir().to_path_buf(),
+                output_path: expected,
+                format,
+                overwrite: args.force,
+                strip_binaries: strip,
+                source_file: Some(source_name),
+                keep_temp,
+            })?;
+        } else {
+            let mut converter = PackageConverter::new(metadata, parser.extract_dir())?
+                .with_overwrite(args.force)
+                .with_strip_binaries(strip)
+                .with_source_file(source_name);
+
+            // Optionally stage through an nspawn sandbox (guard kept alive
+            // for the build)
+            let mut _sandbox_guard: Option<tempfile::TempDir> = None;
+            if args.sandbox {
+                let guard = tempfile::Builder::new().prefix("rexeb-").tempdir()?;
+                let root = guard.path().to_path_buf();
+                converter = converter.with_sandbox(&root)?;
+                _sandbox_guard = Some(guard);
+                pb.set_message("Building in sandbox...");
+            }
+
+            output_path = converter.build(output_dir, format)?;
         }
 
-        let output_path = converter.build(output_dir, args.format)?;
+        if args.sign || args.sign_key.is_some() {
+            let sig = sign_package(&output_path, args.sign_key.as_deref())?;
+            if promptable {
+                println!("Signed {}", sig.display());
+            } else {
+                pb.println(format!("Signed {}", sig.display()));
+            }
+        }
+
         pb.set_position(100);
         pb.finish_with_message(format!("Created {}", output_path.display()));
+        if promptable {
+            println!("Created {}", output_path.display());
+        }
+    }
+
+    if keep_temp {
+        let kept = parser.persist();
+        if promptable {
+            println!("Kept temp dir: {}", kept.display());
+        } else {
+            pb.println(format!("Kept temp dir: {}", kept.display()));
+        }
     }
 
     Ok(())
 }
 
-/// Execute the update command
-pub async fn execute_update(args: &super::UpdateArgs) -> Result<()> {
-    use crate::resolver::database::PackageDatabase;
-    use indicatif::{ProgressBar, ProgressStyle};
+/// Print what a conversion would do, without writing anything
+fn print_dry_run_plan(
+    input: &Path,
+    output_dir: &Path,
+    metadata: &crate::models::PackageMetadata,
+    format: super::OutputFormat,
+    gen_pkgbuild: bool,
+    skip_deps: bool,
+) {
+    use console::style;
+    use crate::models::DependencyType;
 
-    let style = ProgressStyle::with_template(
-        "{spinner:.green} [{bar:40.cyan/blue}] {msg}"
-    )
-    .unwrap();
+    println!("{} {}", style("Dry run:").cyan().bold(), input.display());
+    if gen_pkgbuild {
+        println!(
+            "  Output:   {}/{{PKGBUILD,.SRCINFO}}",
+            output_dir.join(metadata.effective_name()).display()
+        );
+    } else {
+        let file_name =
+            crate::converter::PackageConverter::package_file_name(metadata, format);
+        println!("  Output:   {}", output_dir.join(&file_name).display());
+        println!("  Format:   {}", format.extension());
+    }
+    println!(
+        "  Package:  {} {}-{} ({})",
+        metadata.effective_name(),
+        metadata.version,
+        metadata.release,
+        metadata.arch.to_arch_name()
+    );
+    println!("  Files:    {}", metadata.files.len());
+    if skip_deps {
+        println!("  Depends:  (resolution skipped)");
+        return;
+    }
+
+    let show = |title: &str, types: &[DependencyType]| {
+        let mut mapped = Vec::new();
+        let mut unmapped = Vec::new();
+        for t in types {
+            for d in metadata.get_deps(*t) {
+                if d.is_mapped() {
+                    mapped.push(format!("{} (from {})", d.to_arch_string(), d.debian_name));
+                } else {
+                    unmapped.push(d.debian_name.clone());
+                }
+            }
+        }
+        if mapped.is_empty() && unmapped.is_empty() {
+            return;
+        }
+        println!("  {}:", title);
+        for m in mapped {
+            println!("    {} {}", style("✓").green(), m);
+        }
+        for u in unmapped {
+            println!(
+                "    {} {} (UNMAPPED — will be dropped)",
+                style("✗").red(),
+                u
+            );
+        }
+    };
+    show(
+        "Depends",
+        &[DependencyType::Depends, DependencyType::PreDepends],
+    );
+    show(
+        "Optdepends",
+        &[DependencyType::Recommends, DependencyType::Suggests],
+    );
+
+    let provides = metadata.get_deps(DependencyType::Provides);
+    if !provides.is_empty() {
+        let list: Vec<String> = provides.iter().map(|d| d.to_arch_string()).collect();
+        println!("  Provides: {}", list.join(", "));
+    }
+}
+
+/// Detach-sign a built package with GPG, returning the `.sig` path
+fn sign_package(path: &Path, key: Option<&str>) -> Result<std::path::PathBuf> {
+    let have_gpg = std::process::Command::new("gpg")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !have_gpg {
+        return Err(crate::error::RexebError::PackageBuild(
+            "gpg not found — cannot sign (install gnupg)".into(),
+        ));
+    }
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "package".to_string());
+    let sig_path = path.with_file_name(format!("{}.sig", file_name));
+
+    let mut cmd = std::process::Command::new("gpg");
+    cmd.arg("--detach-sign").arg("--yes");
+    if let Some(k) = key {
+        cmd.arg("--local-user").arg(k);
+    }
+    cmd.arg("--output").arg(&sig_path).arg(path);
+    let output = cmd.output()?;
+    if !output.status.success() {
+        return Err(crate::error::RexebError::PackageBuild(format!(
+            "gpg signing failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(sig_path)
+}
+
+/// Execute the completions command
+pub async fn execute_completions(args: &super::CompletionsArgs) -> Result<()> {
+    use clap::CommandFactory;
+    let mut cmd = super::Cli::command();
+    clap_complete::generate(
+        args.shell.to_generator(),
+        &mut cmd,
+        "rexeb".to_string(),
+        &mut std::io::stdout(),
+    );
+    Ok(())
+}
+
+/// Execute the manpage command
+pub async fn execute_manpage(args: &super::ManpageArgs) -> Result<()> {
+    use clap::CommandFactory;
+    let cmd = super::Cli::command();
+    let man = clap_mangen::Man::new(cmd);
+    let mut buf: Vec<u8> = Vec::new();
+    man.render(&mut buf)?;
+    match &args.output {
+        Some(path) => {
+            std::fs::write(path, buf)?;
+            println!("Wrote {}", path.display());
+        }
+        None => {
+            use std::io::Write;
+            std::io::stdout().write_all(&buf)?;
+        }
+    }
+    Ok(())
+}
+
+/// Execute the hidden sandbox-build command (re-exec target for isolated builds)
+pub fn execute_sandbox_build(args: &super::SandboxBuildArgs) -> Result<()> {
+    use crate::converter::PackageConverter;
+
+    let content = std::fs::read_to_string(&args.manifest)?;
+    let manifest: crate::sandbox::SandboxManifest = serde_json::from_str(&content)?;
+    std::fs::create_dir_all(&args.out_dir)?;
+    let converter = PackageConverter::new(manifest.metadata, &manifest.data_dir)?
+        .with_overwrite(manifest.overwrite)
+        .with_strip_binaries(manifest.strip_binaries);
+    let converter = match manifest.source_file {
+        Some(name) => converter.with_source_file(name),
+        None => converter,
+    };
+    let output = converter.build(&args.out_dir, manifest.format)?;
+    // The parent collects the artifact by scanning the out dir; the printed
+    // name is for logs and debugging.
+    println!(
+        "{}",
+        output
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    );
+    Ok(())
+}
+
+/// Execute the update command
+pub async fn execute_update(args: &super::UpdateArgs, quiet: bool) -> Result<()> {
+    use crate::resolver::database::PackageDatabase;
+    use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+
+    let style = ProgressStyle::with_template("{spinner:.green} {msg}").unwrap();
 
     let pb = ProgressBar::new_spinner();
-    pb.set_style(style.clone());
+    pb.set_style(style);
+    if quiet {
+        pb.set_draw_target(ProgressDrawTarget::hidden());
+    } else {
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
+    }
 
     let update_all = args.all || (!args.virtual_packages && !args.mappings && !args.aur);
 
@@ -160,11 +580,13 @@ pub async fn execute_update(args: &super::UpdateArgs) -> Result<()> {
     // Enlarge: crawl local sync DBs and optionally debtap mappings
     if args.enlarge {
         pb.set_message("Enlarging mappings from local repo DBs...");
-        let added = enlarge_mappings(&mut db).await?;
-        if added > 0 {
-            println!("Enlarged: {} new mappings proposed from local DB scan", added);
-        } else {
-            println!("No new mappings found during enlarge scan");
+        let added = db.enlarge().await?;
+        if !quiet {
+            if added > 0 {
+                println!("Enlarged: {} new mappings proposed from local DB scan", added);
+            } else {
+                println!("No new mappings found during enlarge scan");
+            }
         }
     }
 
@@ -172,107 +594,9 @@ pub async fn execute_update(args: &super::UpdateArgs) -> Result<()> {
     Ok(())
 }
 
-/// Enlarge mappings by scanning pacman sync DBs and proposing new entries
-async fn enlarge_mappings(db: &mut crate::resolver::database::PackageDatabase) -> Result<usize> {
-    use std::collections::HashMap;
-    use std::io::Read;
-    use std::path::Path;
-
-    // Scan Arch sync DBs to harvest all package names + provides
-    let sync_dir = Path::new("/var/lib/pacman/sync");
-    let mut arch_names: Vec<String> = Vec::new();
-    let mut provides_map: HashMap<String, String> = HashMap::new();
-
-    if sync_dir.exists() {
-        for entry in std::fs::read_dir(sync_dir).map_err(|e| crate::error::RexebError::Other(e.to_string()))? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("db") {
-                continue;
-            }
-            if let Ok(file) = std::fs::File::open(&path) {
-                let decoder = flate2::read::GzDecoder::new(file);
-                let mut archive = tar::Archive::new(decoder);
-                for ent in archive.entries().into_iter().flatten().flatten() {
-                    let path_in = ent.path().unwrap_or_default().to_path_buf();
-                    let comps: Vec<_> = path_in.components().collect();
-                    if comps.len() < 2 || comps[1].as_os_str().to_string_lossy() != "desc" {
-                        continue;
-                    }
-                    let mut content = String::new();
-                    let mut r = ent;
-                    let _ = r.read_to_string(&mut content);
-                    // Extract NAME
-                    if let Some(start) = content.find("%NAME%") {
-                        let rest = &content[start + 6..];
-                        let name = rest.lines().skip(1).next().unwrap_or("").trim().to_string();
-                        if !name.is_empty() {
-                            arch_names.push(name.clone());
-                            // Extract PROVIDES for this package
-                            if let Some(p) = content.find("%PROVIDES%") {
-                                let pr = &content[p + 10..];
-                                for prov in pr.lines().take_while(|l| !l.starts_with('%')).map(|l| l.trim().to_string()).filter(|l| !l.is_empty()) {
-                                    provides_map.entry(prov).or_insert_with(|| name.clone());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Debtap mapping import (if reachable)
-    let debtap_url = "https://raw.githubusercontent.com/helixarch/debtap/master/debtap";
-    let mut debtap_mappings: HashMap<String, String> = HashMap::new();
-    if let Ok(client) = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-    {
-        if let Ok(resp) = client.get(debtap_url).send().await {
-            if resp.status().is_success() {
-                if let Ok(text) = resp.text().await {
-                    // debtap mappings look like: "pkg-deb" => "pkg-arch"
-                    let re = regex::Regex::new(r#""([^"]+)"\s*=>\s*"([^"]+)""#).unwrap();
-                    for cap in re.captures_iter(&text).take(2000) {
-                        let deb = cap[1].to_string();
-                        let arch = cap[2].to_string();
-                        if !deb.is_empty() && !arch.is_empty() {
-                            debtap_mappings.insert(deb, arch);
-                        }
-                    }
-                    tracing::info!("Parsed {} debtap mappings", debtap_mappings.len());
-                }
-            }
-        }
-    }
-
-    // Merge: for each debtap or provides entry not in DB, propose with confidence 0.7-0.8
-    let mut added = 0;
-    for (deb, arch) in debtap_mappings.iter().chain(provides_map.iter()) {
-        if db.lookup(deb).unwrap_or(None).is_none() {
-            // Validate arch name looks plausible
-            if arch.is_empty() || arch.contains('/') || arch.contains(' ') {
-                continue;
-            }
-            db.add_mapping(deb, arch, 0.75);
-            added += 1;
-        }
-    }
-
-    if added > 0 {
-        db.save()?;
-    }
-
-    tracing::info!("Enlarge finished: {} new mappings, scanned {} arch packages", added, arch_names.len());
-    Ok(added)
-}
-
 /// Execute the info command
 pub async fn execute_info(args: &super::InfoArgs) -> Result<()> {
-    use crate::parsers::deb::DebParser;
-
-    let parser = DebParser::new(&args.package)?;
+    let parser = crate::parsers::detect_and_create(&args.package)?;
     let metadata = parser.parse()?;
 
     match args.format {
@@ -314,11 +638,44 @@ pub async fn execute_info(args: &super::InfoArgs) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&metadata)?);
         }
         super::InfoFormat::Toml => {
-            println!("{}", toml::to_string_pretty(&metadata).map_err(|e| crate::error::RexebError::Other(e.to_string()))?);
+            println!("{}", to_toml_pretty(&metadata)?);
         }
     }
 
     Ok(())
+}
+
+/// Convert a JSON value to TOML
+///
+/// Metadata contains maps with non-string keys (enums, paths) which TOML
+/// cannot serialize directly, so values go through a JSON round-trip first.
+fn json_to_toml(value: &serde_json::Value) -> toml::Value {
+    match value {
+        serde_json::Value::Null => toml::Value::String("null".to_string()),
+        serde_json::Value::Bool(b) => toml::Value::Boolean(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                toml::Value::Integer(i)
+            } else if let Some(f) = n.as_f64() {
+                toml::Value::Float(f)
+            } else {
+                toml::Value::String(n.to_string())
+            }
+        }
+        serde_json::Value::String(s) => toml::Value::String(s.clone()),
+        serde_json::Value::Array(a) => toml::Value::Array(a.iter().map(json_to_toml).collect()),
+        serde_json::Value::Object(o) => toml::Value::Table(
+            o.iter().map(|(k, v)| (k.clone(), json_to_toml(v))).collect(),
+        ),
+    }
+}
+
+/// Serialize any value as pretty TOML via a JSON round-trip
+fn to_toml_pretty<T: serde::Serialize>(value: &T) -> Result<String> {
+    let json = serde_json::to_value(value)?;
+    let toml_value = json_to_toml(&json);
+    toml::to_string_pretty(&toml_value)
+        .map_err(|e| crate::error::RexebError::Other(e.to_string()))
 }
 
 /// Execute the search command
@@ -364,12 +721,17 @@ pub async fn execute_search(args: &super::SearchArgs) -> Result<()> {
 
 /// Execute the analyze command
 pub async fn execute_analyze(args: &super::AnalyzeArgs) -> Result<()> {
-    use crate::parsers::deb::DebParser;
     use crate::analyzer::PackageAnalyzer;
     use console::style;
 
-    let parser = DebParser::new(&args.input)?;
-    let metadata = parser.parse()?;
+    let parser = crate::parsers::detect_and_create(&args.input)?;
+    let mut metadata = parser.parse()?;
+    metadata.normalize_version();
+
+    // Resolve first: without this every dependency reports as unmapped and
+    // the analysis is useless
+    let resolver = crate::resolver::DependencyResolver::new()?;
+    resolver.resolve(&mut metadata).await?;
 
     let analyzer = PackageAnalyzer::new(&metadata, parser.extract_dir())?;
     let report = analyzer.analyze(args.conflicts, args.verify)?;
@@ -440,7 +802,7 @@ pub async fn execute_analyze(args: &super::AnalyzeArgs) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
         super::InfoFormat::Toml => {
-            println!("{}", toml::to_string_pretty(&report).map_err(|e| crate::error::RexebError::Other(e.to_string()))?);
+            println!("{}", to_toml_pretty(&report)?);
         }
     }
 
@@ -448,7 +810,7 @@ pub async fn execute_analyze(args: &super::AnalyzeArgs) -> Result<()> {
 }
 
 /// Execute the install command
-pub async fn execute_install(args: &super::InstallArgs) -> Result<()> {
+pub async fn execute_install(args: &super::InstallArgs, quiet: bool) -> Result<()> {
     use std::process::Command;
     use tempfile::TempDir;
 
@@ -461,31 +823,52 @@ pub async fn execute_install(args: &super::InstallArgs) -> Result<()> {
         force: false,
         pkgbuild: false,
         yes: args.yes,
+        interactive: false,
+        dry_run: false,
+        sign: false,
+        sign_key: None,
         pseudo64: false,
         keep_temp: false,
         sandbox: args.sandbox,
+        sandbox_backend: None,
         name: None,
         version_override: None,
         release: None,
-        format: super::OutputFormat::PkgTarZst,
+        format: None,
     };
 
-    execute_convert(&convert_args).await?;
+    execute_convert(&convert_args, quiet, None).await?;
 
-    // Find converted packages
+    // Find converted packages (any .pkg.tar.* compression)
     let packages: Vec<_> = std::fs::read_dir(temp_dir.path())?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "zst"))
         .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map_or(false, |n| n.contains(".pkg.tar."))
+        })
         .collect();
 
     if packages.is_empty() {
         return Err(crate::error::RexebError::PackageBuild("No packages were created".into()));
     }
 
-    // Build pacman command
-    let mut cmd = Command::new("sudo");
-    cmd.arg("pacman").arg("-U");
+    // Build pacman command (no sudo when already root — containers often
+    // lack sudo entirely)
+    let is_root = Command::new("id")
+        .arg("-u")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "0")
+        .unwrap_or(false);
+    let mut cmd = if is_root {
+        Command::new("pacman")
+    } else {
+        let mut c = Command::new("sudo");
+        c.arg("pacman");
+        c
+    };
+    cmd.arg("-U");
 
     if args.yes {
         cmd.arg("--noconfirm");
@@ -528,10 +911,28 @@ pub async fn execute_config(args: &super::ConfigArgs) -> Result<()> {
         }
         super::ConfigCommands::Edit => {
             let config_path = Config::config_path()?;
+            if let Some(parent) = config_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            if !config_path.exists() {
+                Config::default().save()?;
+            }
             let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
-            std::process::Command::new(editor)
+            let status = std::process::Command::new(&editor)
                 .arg(&config_path)
-                .status()?;
+                .status()
+                .map_err(|e| {
+                    crate::error::RexebError::Other(format!(
+                        "Could not launch editor '{}': {}",
+                        editor, e
+                    ))
+                })?;
+            if !status.success() {
+                return Err(crate::error::RexebError::Other(format!(
+                    "Editor exited with status: {}",
+                    status
+                )));
+            }
         }
         super::ConfigCommands::Reset => {
             Config::reset()?;
@@ -551,9 +952,26 @@ pub async fn execute_config(args: &super::ConfigArgs) -> Result<()> {
                 println!("Key '{}' not found", key);
             }
         }
-        super::ConfigCommands::Init { force } => {
-            Config::init(*force)?;
-            println!("Configuration initialized");
+        super::ConfigCommands::Init { force, interactive } => {
+            if *interactive {
+                if !super::interactive::is_promptable(false, false) {
+                    return Err(crate::error::RexebError::Validation(
+                        "config init --interactive needs a terminal".into(),
+                    ));
+                }
+                let path = Config::config_path()?;
+                if path.exists() && !*force {
+                    return Err(crate::error::RexebError::Config(
+                        "Configuration file already exists. Use --force to overwrite.".into(),
+                    ));
+                }
+                let config = super::interactive::prompt_config_wizard()?;
+                config.save()?;
+                println!("Configuration initialized at {}", path.display());
+            } else {
+                Config::init(*force)?;
+                println!("Configuration initialized");
+            }
         }
     }
 
@@ -573,10 +991,23 @@ pub async fn execute_clean(args: &super::CleanArgs) -> Result<()> {
         candidates.push(config.cache_dir());
     }
     if clean_all || args.temp {
-        candidates.push(std::env::temp_dir().join("rexeb"));
+        // Temp dirs are created with a `rexeb-` prefix (see DebParser and
+        // the sandbox/aur-push flows); collect leftovers from --keep-temp,
+        // crashes, or older runs.
+        if let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) {
+            for entry in entries.flatten() {
+                if entry
+                    .file_name()
+                    .to_str()
+                    .map_or(false, |n| n.starts_with("rexeb-"))
+                {
+                    candidates.push(entry.path());
+                }
+            }
+        }
     }
 
-    // Use rayon to filter candidates to existing directories in parallel
+    // Filter to paths that actually exist (in parallel for large temp dirs)
     let existing: Vec<_> = candidates
         .par_iter()
         .filter(|p| p.exists())
@@ -584,18 +1015,30 @@ pub async fn execute_clean(args: &super::CleanArgs) -> Result<()> {
         .collect();
 
     if args.dry_run {
-        existing.par_iter().for_each(|p| {
-            println!("Would remove: {}", p.display());
-        });
+        if existing.is_empty() {
+            println!("Nothing to clean");
+        } else {
+            for p in &existing {
+                println!("Would remove: {}", p.display());
+            }
+        }
     } else {
-        // Remove directories in parallel and collect successfully cleaned ones
+        // Remove in parallel (files and dirs) and report afterwards so
+        // parallel println! calls cannot interleave mid-line
         let cleaned: Vec<_> = existing
             .par_iter()
-            .filter_map(|p| match std::fs::remove_dir_all(p) {
-                Ok(()) => Some(p.clone()),
-                Err(e) => {
-                    eprintln!("Failed to remove {}: {}", p.display(), e);
-                    None
+            .filter_map(|p| {
+                let removed = if p.is_dir() {
+                    std::fs::remove_dir_all(p)
+                } else {
+                    std::fs::remove_file(p)
+                };
+                match removed {
+                    Ok(()) => Some(p.clone()),
+                    Err(e) => {
+                        eprintln!("Failed to remove {}: {}", p.display(), e);
+                        None
+                    }
                 }
             })
             .collect();
@@ -603,7 +1046,7 @@ pub async fn execute_clean(args: &super::CleanArgs) -> Result<()> {
         if cleaned.is_empty() {
             println!("Nothing to clean");
         } else {
-            println!("Cleaned {} directories", cleaned.len());
+            println!("Cleaned {} paths", cleaned.len());
         }
     }
 
@@ -617,65 +1060,89 @@ pub async fn execute_map(args: &super::MapArgs) -> Result<()> {
 
     match &args.command {
         super::MapCommands::Add { debian, arch, confidence } => {
+            let (debian, arch, confidence) =
+                if debian.is_none() || arch.is_none() {
+                    if !super::interactive::is_promptable(false, false) {
+                        return Err(crate::error::RexebError::Validation(
+                            "map add needs debian and arch names (no terminal for prompting)".into(),
+                        ));
+                    }
+                    super::interactive::prompt_map_add(
+                        debian.clone(),
+                        arch.clone(),
+                        *confidence,
+                    )?
+                } else {
+                    (
+                        debian.clone().unwrap_or_default(),
+                        arch.clone().unwrap_or_default(),
+                        *confidence,
+                    )
+                };
+            if !confidence.is_finite() || confidence < 0.0 || confidence > 1.0 {
+                return Err(crate::error::RexebError::Validation(
+                    "confidence must be between 0.0 and 1.0".into(),
+                ));
+            }
             let mut db = PackageDatabase::new()?;
-            db.add_mapping(debian, arch, *confidence);
+            db.add_mapping(&debian, &arch, confidence);
             db.save()?;
             println!("{} {} -> {} (confidence: {:.2})", style("Added:").green(), debian, arch, confidence);
         }
         super::MapCommands::Remove { debian } => {
-            let _db = PackageDatabase::new()?;
-            // Reload and remove: add_mapping then save with only that key removed would re-add; do direct remove
-            // We need access to mappings - use save after manual removal via database file
-            let db_dir = crate::config::Config::load().unwrap_or_default().data_dir().join("db");
-            let mappings_path = if db_dir.join("mappings.json").exists() {
-                db_dir.join("mappings.json")
+            let mut db = PackageDatabase::new()?;
+            if db.remove_mapping(debian) {
+                db.save()?;
+                println!("{} {}", style("Removed:").yellow(), debian);
             } else {
-                dirs::data_dir().unwrap_or_default().join("rexeb").join("db").join("mappings.json")
-            };
-            // Try both locations - fallback: just try to update in-memory and persist
-            if mappings_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(&mappings_path) {
-                    if let Ok(mut raw) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(inner) = raw.get_mut("mappings") {
-                            if let Some(obj) = inner.as_object_mut() {
-                                if obj.remove(debian).is_some() {
-                                    std::fs::write(&mappings_path, serde_json::to_string_pretty(&raw)?)?;
-                                    println!("{} {}", style("Removed:").yellow(), debian);
-                                    return Ok(());
-                                }
-                            }
-                        }
-                    }
-                }
+                println!("{} no mapping for '{}'", style("Note:").yellow(), debian);
             }
-            // In-memory fallback
-            let mappings_content = _db.save();
-            let _ = mappings_content;
-            println!("{} {} (in-memory; next load will not contain it if you export excluding it)", style("Note:").yellow(), debian);
         }
         super::MapCommands::List { json } => {
             let db = PackageDatabase::new()?;
+            let mappings = db.mappings();
             if *json {
-                let count = db.get_arch_package_names().len();
-                println!("{{\"arch_packages_known\": {}}}", count);
-                println!("(Use `rexeb map export <file>` for full mappings dump)");
+                println!("{}", serde_json::to_string_pretty(mappings)?);
+            } else {
+                println!("{} effective mappings:", mappings.len());
+                let mut keys: Vec<&String> = mappings.keys().collect();
+                keys.sort();
+                for key in keys.iter().take(50) {
+                    let m = &mappings[*key];
+                    println!("  {} -> {} ({:.2})", m.debian_name, m.arch_name, m.confidence);
+                }
+                if mappings.len() > 50 {
+                    println!("  ... and {} more (use --json or `map export`)", mappings.len() - 50);
+                }
             }
-            let count = db.get_arch_package_names().len();
-            println!("Arch packages known: {}", count);
-            println!("Mappings stored in: ~/.local/share/rexeb/db/mappings.json and db/mappings.json");
-            println!("(Use `rexeb map export <file>` to dump current effective mappings)");
         }
         super::MapCommands::Import { file } => {
+            use std::collections::HashMap;
             let content = std::fs::read_to_string(file)?;
-            let imported: std::collections::HashMap<String, crate::resolver::database::PackageMapping> = if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(inner) = v.get("mappings") {
-                    serde_json::from_value(inner.clone())?
-                } else {
-                    serde_json::from_value(v)?
-                }
-            } else {
-                serde_json::from_str(&content)?
-            };
+            let value: serde_json::Value = serde_json::from_str(&content)?;
+            let inner = value.get("mappings").cloned().unwrap_or(value);
+            // Accept the full mapping objects as well as a simple
+            // {"debian": "arch"} shape (confidence 1.0)
+            let imported: HashMap<String, crate::resolver::database::PackageMapping> =
+                serde_json::from_value(inner.clone()).or_else(|_| {
+                    let simple: HashMap<String, String> = serde_json::from_value(inner)?;
+                    Ok::<_, serde_json::Error>(
+                        simple
+                            .into_iter()
+                            .map(|(k, v)| {
+                                (
+                                    k.clone(),
+                                    crate::resolver::database::PackageMapping {
+                                        debian_name: k,
+                                        arch_name: v,
+                                        confidence: 1.0,
+                                        source: crate::resolver::database::MappingSource::User,
+                                    },
+                                )
+                            })
+                            .collect(),
+                    )
+                })?;
             let mut db = PackageDatabase::new()?;
             let mut added = 0;
             for (k, m) in imported {
@@ -687,47 +1154,18 @@ pub async fn execute_map(args: &super::MapArgs) -> Result<()> {
         }
         super::MapCommands::Export { file } => {
             let db = PackageDatabase::new()?;
-            // Export effective mappings from bundled + user overlay
-            // We serialize by reading current db state via a temp round-trip
-            let export: std::collections::HashMap<String, crate::resolver::database::PackageMapping> = {
-                // Build from the bundled JSON + user overlay for a fair snapshot
-                let mut all = std::collections::HashMap::new();
-                for path in [std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("db/mappings.json")] {
-                    if path.exists() {
-                        if let Ok(c) = std::fs::read_to_string(&path) {
-                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&c) {
-                                if let Some(inner) = v.get("mappings") {
-                                    if let Ok(m) = serde_json::from_value::<std::collections::HashMap<String, crate::resolver::database::PackageMapping>>(inner.clone()) {
-                                        all.extend(m);
-                                    }
-                                }
-                            }
-                        }
-                    }
+            if let Some(parent) = file.parent() {
+                if !parent.as_os_str().is_empty() {
+                    std::fs::create_dir_all(parent)?;
                 }
-                // Overlay user file
-                let user_path = crate::config::Config::load().unwrap_or_default().data_dir().join("db").join("mappings.json");
-                for p in [dirs::data_dir().unwrap_or_default().join("rexeb").join("db").join("mappings.json"), user_path] {
-                    if p.exists() {
-                        if let Ok(c) = std::fs::read_to_string(&p) {
-                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&c) {
-                                if let Some(inner) = v.get("mappings") {
-                                    if let Ok(m) = serde_json::from_value::<std::collections::HashMap<String, crate::resolver::database::PackageMapping>>(inner.clone()) {
-                                        all.extend(m);
-                                    }
-                                } else if let Ok(m) = serde_json::from_value::<std::collections::HashMap<String, crate::resolver::database::PackageMapping>>(v) {
-                                    all.extend(m);
-                                }
-                            }
-                        }
-                    }
-                }
-                all
-            };
-            let wrapped = serde_json::json!({"version": 1, "count": export.len(), "mappings": export});
+            }
+            let wrapped = serde_json::json!({
+                "version": 1,
+                "count": db.mappings().len(),
+                "mappings": db.mappings(),
+            });
             std::fs::write(file, serde_json::to_string_pretty(&wrapped)?)?;
-            println!("Exported {} mappings to {}", export.len(), file.display());
-            let _ = db;
+            println!("Exported {} mappings to {}", db.mappings().len(), file.display());
         }
     }
     Ok(())
@@ -746,7 +1184,13 @@ pub async fn execute_check_aur(args: &super::CheckAurArgs) -> Result<()> {
         }
         let client = AurClient::new();
         for pkg in &installed {
-            let aur = client.info(&[&pkg.name]).await.unwrap_or_default();
+            let aur = match client.info(&[pkg.name.as_str()]).await {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("{} AUR lookup failed for '{}': {}", style("Warning:").yellow(), pkg.name, e);
+                    continue;
+                }
+            };
             if let Some(aur_pkg) = aur.first() {
                 let installed_ver = &pkg.version;
                 let latest = aur_pkg.version.as_str();
@@ -765,20 +1209,35 @@ pub async fn execute_check_aur(args: &super::CheckAurArgs) -> Result<()> {
     let query = match &args.package {
         Some(q) => q.clone(),
         None => {
-            eprintln!("Usage: rexeb check-aur <package.deb | package-name> [--installed]");
+            eprintln!("Usage: rexeb check-aur <package.deb | package.rpm | package.AppImage | package-name> [--installed]");
             return Ok(());
         }
     };
 
-    // If query is a .deb file, parse its name
-    let pkg_name = if std::path::Path::new(&query).extension().and_then(|e| e.to_str()) == Some("deb") {
-        let p = std::path::Path::new(&query);
-        if p.exists() {
-            let parser = crate::parsers::deb::DebParser::new(p)?;
-            let meta = parser.parse()?;
-            meta.effective_name().to_string()
-        } else {
-            query.clone()
+    // If the query is a package file, resolve its package name (AppImages
+    // use the cheap filename heuristic — no need to extract gigabytes)
+    let p = std::path::Path::new(&query);
+    let known_ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| {
+            matches!(
+                e.to_ascii_lowercase().as_str(),
+                "deb" | "rpm" | "appimage"
+            )
+        })
+        .unwrap_or(false);
+    let pkg_name = if p.exists() && crate::parsers::appimage::is_appimage(p) {
+        let stem = p
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_else(|| query.as_str());
+        crate::parsers::appimage::split_appimage_filename(stem).0
+    } else if p.exists() {
+        match crate::parsers::detect_and_create(p) {
+            Ok(parser) => parser.parse()?.effective_name().to_string(),
+            Err(_) if !known_ext => query.clone(),
+            Err(e) => return Err(e),
         }
     } else {
         query.clone()
@@ -786,7 +1245,9 @@ pub async fn execute_check_aur(args: &super::CheckAurArgs) -> Result<()> {
 
     println!("Checking AUR for '{}'...", style(&pkg_name).cyan());
     let client = AurClient::new();
-    let results = client.info(&[&pkg_name]).await.unwrap_or_default();
+    let results = client.info(&[pkg_name.as_str()]).await.map_err(|e| {
+        crate::error::RexebError::Network(format!("AUR lookup failed: {}", e))
+    })?;
     if results.is_empty() {
         let search = client.search(&pkg_name).await.unwrap_or_default();
         if search.is_empty() {
@@ -814,6 +1275,8 @@ pub async fn execute_aur_push(args: &super::AurPushArgs) -> Result<()> {
 
     let input = &args.input;
     let pkgbuild_dir: std::path::PathBuf;
+    // Holds a generated temp dir alive until the push finishes (auto-cleaned)
+    let mut _temp_guard: Option<tempfile::TempDir> = None;
 
     // Determine PKGBUILD location
     if input.is_dir() {
@@ -822,10 +1285,10 @@ pub async fn execute_aur_push(args: &super::AurPushArgs) -> Result<()> {
             return Err(crate::error::RexebError::Validation(format!("No PKGBUILD in {}", input.display())));
         }
         pkgbuild_dir = input.clone();
-    } else if input.extension().and_then(|e| e.to_str()) == Some("deb") {
-        // Convert to PKGBUILD first
-        let temp = tempfile::TempDir::new()?;
-        let parser = crate::parsers::deb::DebParser::new(input)?;
+    } else if input.is_file() {
+        // Convert any supported format (.deb/.rpm/.AppImage) to PKGBUILD first
+        let temp = tempfile::Builder::new().prefix("rexeb-").tempdir()?;
+        let parser = crate::parsers::detect_and_create(input)?;
         let mut meta = parser.parse()?;
         if let Some(ref pb) = args.pkgbase {
             meta.arch_name = Some(pb.clone());
@@ -848,16 +1311,12 @@ pub async fn execute_aur_push(args: &super::AurPushArgs) -> Result<()> {
                 println!("  git remote add aur ssh://aur@aur.archlinux.org/{}.git", pb);
                 println!("  git push aur master");
             }
+            print_pkgbuild_stub_warning();
             return Ok(());
         }
-        // Keep temp alive for push - leak it for now
-        let _ = temp.keep();
-        // Re-resolve path after keep
-        if args.dry_run {
-            return Ok(());
-        }
+        _temp_guard = Some(temp);
     } else {
-        return Err(crate::error::RexebError::Validation(format!("Input must be a .deb or directory with PKGBUILD: {}", input.display())));
+        return Err(crate::error::RexebError::Validation(format!("Input must be a package file (.deb, .rpm, .AppImage) or a directory with a PKGBUILD: {}", input.display())));
     }
 
     if args.dry_run {
@@ -868,6 +1327,7 @@ pub async fn execute_aur_push(args: &super::AurPushArgs) -> Result<()> {
             println!("\n--- .SRCINFO ---\n{}", std::fs::read_to_string(&srcinfo_path)?);
         }
         println!("\n{}: would push to AUR as '{}'", style("Dry run").yellow(), args.pkgbase.as_deref().unwrap_or("from PKGBUILD"));
+        print_pkgbuild_stub_warning();
         return Ok(());
     }
 
@@ -911,14 +1371,22 @@ pub async fn execute_aur_push(args: &super::AurPushArgs) -> Result<()> {
         }
     }
 
-    // Generate .SRCINFO if missing
+    // Generate .SRCINFO if missing, preferring makepkg's own printer so the
+    // pushed metadata matches what `makepkg --printsrcinfo` would produce
     if !pkgbuild_dir.join(".SRCINFO").exists() {
-        if let Ok(content) = std::fs::read_to_string(pkgbuild_dir.join("PKGBUILD")) {
-            let meta = crate::models::PackageMetadata::new(&pkgbase, "0");
-            let srcinfo = generate_srcinfo(&meta);
-            std::fs::write(pkgbuild_dir.join(".SRCINFO"), srcinfo)?;
-            let _ = content;
-            let _ = meta;
+        let printed = std::process::Command::new("makepkg")
+            .arg("--printsrcinfo")
+            .current_dir(&pkgbuild_dir)
+            .output();
+        match printed {
+            Ok(output) if output.status.success() => {
+                std::fs::write(pkgbuild_dir.join(".SRCINFO"), output.stdout)?;
+            }
+            _ => {
+                let content = std::fs::read_to_string(pkgbuild_dir.join("PKGBUILD"))?;
+                let srcinfo = srcinfo_from_pkgbuild_text(&content);
+                std::fs::write(pkgbuild_dir.join(".SRCINFO"), srcinfo)?;
+            }
         }
     }
 
@@ -950,6 +1418,17 @@ pub async fn execute_aur_push(args: &super::AurPushArgs) -> Result<()> {
     Ok(())
 }
 
+/// Warn that generated PKGBUILDs are binary-repack stubs, not AUR-ready sources
+fn print_pkgbuild_stub_warning() {
+    use console::style;
+    println!(
+        "\n{} rexeb-generated PKGBUILDs are binary-repack stubs without `source=()`.",
+        style("Note:").yellow()
+    );
+    println!("  Before pushing to the AUR, add a `source=()` pointing at the upstream");
+    println!("  package file, fill in `sha256sums=()`, and run `makepkg --printsrcinfo > .SRCINFO`.");
+}
+
 fn generate_srcinfo(meta: &crate::models::PackageMetadata) -> String {
     let mut s = String::new();
     s.push_str(&format!("pkgbase = {}\n", meta.effective_name()));
@@ -959,10 +1438,121 @@ fn generate_srcinfo(meta: &crate::models::PackageMetadata) -> String {
     s.push_str(&format!("\turl = {}\n", meta.url.as_deref().unwrap_or("https://github.com/onionorbit/rexeb")));
     s.push_str(&format!("\tarch = {}\n", meta.arch.to_arch_name()));
     s.push_str(&format!("\tlicense = {}\n", meta.license.to_pkgbuild()));
-    for dep in meta.get_deps(crate::models::DependencyType::Depends) {
-        s.push_str(&format!("\tdepends = {}\n", dep.to_arch_string()));
+    for dep in meta
+        .get_deps(crate::models::DependencyType::Depends)
+        .iter()
+        .chain(meta.get_deps(crate::models::DependencyType::PreDepends))
+    {
+        if dep.is_mapped() {
+            s.push_str(&format!("\tdepends = {}\n", dep.to_arch_string()));
+        }
     }
-    s.push_str(&format!("\n{} = {}\n", format!("pkgname = {}", meta.effective_name()), ""));
+    for dep in meta
+        .get_deps(crate::models::DependencyType::Recommends)
+        .iter()
+        .chain(meta.get_deps(crate::models::DependencyType::Suggests))
+    {
+        if dep.is_mapped() {
+            s.push_str(&format!("\toptdepends = {}\n", dep.to_arch_string()));
+        }
+    }
+    s.push_str(&format!("\npkgname = {}\n", meta.effective_name()));
+    s
+}
+
+/// Minimal PKGBUILD parser used as a `.SRCINFO` fallback
+///
+/// Only used when `makepkg --printsrcinfo` is unavailable; understands plain
+/// `key=value` scalars and single-line `(...)` arrays.
+fn srcinfo_from_pkgbuild_text(text: &str) -> String {
+    fn scalar(text: &str, key: &str) -> Option<String> {
+        let prefix = format!("{}=", key);
+        for line in text.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix(prefix.as_str()) {
+                return Some(
+                    rest.trim()
+                        .trim_matches(|c| c == '"' || c == '\'')
+                        .to_string(),
+                );
+            }
+        }
+        None
+    }
+    fn array(text: &str, key: &str) -> Vec<String> {
+        let prefix = format!("{}=", key);
+        for line in text.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix(prefix.as_str()) {
+                let rest = rest
+                    .trim()
+                    .trim_start_matches('(')
+                    .trim_end_matches(')')
+                    .trim();
+                if rest.is_empty() {
+                    return Vec::new();
+                }
+                let mut out = Vec::new();
+                let mut current = String::new();
+                let mut quote: Option<char> = None;
+                for ch in rest.chars() {
+                    if let Some(q) = quote {
+                        if ch == q {
+                            quote = None;
+                        } else {
+                            current.push(ch);
+                        }
+                    } else if ch == '"' || ch == '\'' {
+                        quote = Some(ch);
+                    } else if ch.is_whitespace() {
+                        if !current.is_empty() {
+                            out.push(std::mem::take(&mut current));
+                        }
+                    } else {
+                        current.push(ch);
+                    }
+                }
+                if !current.is_empty() {
+                    out.push(current);
+                }
+                return out;
+            }
+        }
+        Vec::new()
+    }
+
+    let pkgname = scalar(text, "pkgname")
+        .or_else(|| scalar(text, "pkgbase"))
+        .unwrap_or_else(|| "rexeb-pkg".to_string());
+    let mut s = String::new();
+    s.push_str(&format!("pkgbase = {}\n", scalar(text, "pkgbase").unwrap_or_else(|| pkgname.clone())));
+    if let Some(v) = scalar(text, "pkgdesc") {
+        s.push_str(&format!("\tpkgdesc = {}\n", v));
+    }
+    s.push_str(&format!(
+        "\tpkgver = {}\n",
+        scalar(text, "pkgver").unwrap_or_else(|| "0".to_string())
+    ));
+    s.push_str(&format!(
+        "\tpkgrel = {}\n",
+        scalar(text, "pkgrel").unwrap_or_else(|| "1".to_string())
+    ));
+    if let Some(v) = scalar(text, "url") {
+        s.push_str(&format!("\turl = {}\n", v));
+    }
+    for v in array(text, "arch") {
+        s.push_str(&format!("\tarch = {}\n", v));
+    }
+    for v in array(text, "license") {
+        s.push_str(&format!("\tlicense = {}\n", v));
+    }
+    for v in array(text, "depends") {
+        s.push_str(&format!("\tdepends = {}\n", v));
+    }
+    for v in array(text, "optdepends") {
+        s.push_str(&format!("\toptdepends = {}\n", v));
+    }
+    s.push_str(&format!("\npkgname = {}\n", pkgname));
     s
 }
 
@@ -1032,11 +1622,8 @@ pub async fn execute_self_update(args: &super::SelfUpdateArgs) -> Result<()> {
     let api_url = "https://api.github.com/repos/onionorbit/rexeb/releases/latest";
     let cargo_url = "https://raw.githubusercontent.com/onionorbit/rexeb/main/Cargo.toml";
 
-    let client = reqwest::Client::builder()
-        .user_agent(format!("rexeb/{}", current))
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| crate::error::RexebError::Network(e.to_string()))?;
+    let config = crate::config::Config::load().unwrap_or_default();
+    let client = config.http_client()?;
 
     // Try GitHub Releases API first
     let mut latest_version: Option<String> = None;
@@ -1113,21 +1700,45 @@ pub async fn execute_self_update(args: &super::SelfUpdateArgs) -> Result<()> {
         return Ok(());
     }
 
-    println!("\n{} Run one of the update commands above to upgrade.", style("Next steps:").cyan());
+    // NOTE: in-place binary replacement is intentionally not implemented
+    // (replacing a running binary / system package from inside the tool is
+    // unsafe); the commands above are the supported upgrade path.
+    println!("\n{} Automatic replacement is not implemented; run one of the update commands above to upgrade.", style("Next steps:").cyan());
     Ok(())
 }
 
+/// Compare versions where a release beats its own prereleases
+/// (`0.2.4` is newer than `0.2.4-alpha`)
 fn is_version_newer(current: &str, latest: &str) -> bool {
-    // Strip pre-release suffixes (-alpha, -beta)
-    let strip = |s: &str| -> String { s.split('-').next().unwrap_or(s).to_string() };
-    let cur = strip(current);
-    let lat = strip(latest);
-    let parse = |s: &str| s.split('.').filter_map(|p| p.parse::<u64>().ok()).collect::<Vec<_>>();
-    let c: Vec<u64> = parse(&cur);
-    let l: Vec<u64> = parse(&lat);
-    for (a, b) in c.iter().zip(l.iter()) {
-        if b > a { return true; }
-        if a > b { return false; }
+    fn split(s: &str) -> (Vec<u64>, Option<&str>) {
+        let mut parts = s.splitn(2, '-');
+        let core = parts.next().unwrap_or(s);
+        let pre = parts.next();
+        let nums = core
+            .split('.')
+            .filter_map(|p| p.parse::<u64>().ok())
+            .collect();
+        (nums, pre)
     }
-    l.len() > c.len()
+    let (cur, cur_pre) = split(current);
+    let (lat, lat_pre) = split(latest);
+    let width = cur.len().max(lat.len());
+    for i in 0..width {
+        let a = cur.get(i).copied().unwrap_or(0);
+        let b = lat.get(i).copied().unwrap_or(0);
+        if b > a {
+            return true;
+        }
+        if a > b {
+            return false;
+        }
+    }
+    // Equal numeric core: a release beats a prerelease; between two
+    // prereleases the lexicographically later tag wins.
+    match (cur_pre, lat_pre) {
+        (Some(_), None) => true,
+        (None, Some(_)) => false,
+        (Some(a), Some(b)) => b > a,
+        (None, None) => false,
+    }
 }

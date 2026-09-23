@@ -141,26 +141,19 @@ impl FuzzyMatcher {
     }
 
     /// Check for common package naming patterns
+    ///
+    /// Note: this runs on already-normalized names (prefixes, suffixes,
+    /// digits and separators stripped by `normalize_name`), so the remaining
+    /// useful signal is containment. Regex transformations used to be
+    /// compiled here on every call — for thousands of candidates that meant
+    /// tens of thousands of compilations per dependency — and could never
+    /// match normalized input anyway.
     fn pattern_match(&self, debian: &str, arch: &str) -> f32 {
-        // Common transformations
-        let transformations = [
-            // Debian lib*N -> Arch lib*
-            (r"^lib(.+)\d+$", "lib$1"),
-            // python3-* -> python-*
-            (r"^python3-(.+)$", "python-$1"),
-            // *-dev -> *-devel (though Arch usually uses headers)
-            (r"^(.+)-dev$", "$1-devel"),
-        ];
-
-        for (pattern, replacement) in transformations {
-            if let Ok(re) = regex::Regex::new(pattern) {
-                if re.is_match(debian) {
-                    let transformed = re.replace(debian, replacement);
-                    if transformed == arch {
-                        return 0.85;
-                    }
-                }
-            }
+        if debian.is_empty() || arch.is_empty() {
+            return 0.0;
+        }
+        if debian == arch {
+            return 0.95;
         }
 
         // Check if one is a substring of the other

@@ -43,7 +43,8 @@ impl DebParser {
             return Err(RexebError::file_not_found(&path));
         }
 
-        let temp_dir = TempDir::new()?;
+        // Prefixed so `rexeb clean --temp` can find leftovers (e.g. from --keep-temp)
+        let temp_dir = tempfile::Builder::new().prefix("rexeb-").tempdir()?;
         let control_dir = temp_dir.path().join("control");
         let data_dir = temp_dir.path().join("data");
 
@@ -81,20 +82,37 @@ impl DebParser {
         let file = File::open(&self.path)?;
         let mut archive = ar::Archive::new(file);
 
+        let mut found_control = false;
+        let mut found_data = false;
+
         while let Some(entry) = archive.next_entry() {
             let mut entry = entry.map_err(|e| RexebError::Extraction(e.to_string()))?;
+            // ar member names may carry padding or a trailing '/' (GNU variant)
             let name = std::str::from_utf8(entry.header().identifier())
-                .map_err(|e| RexebError::Extraction(e.to_string()))?
-                .to_string();
+                .map_err(|e| RexebError::Extraction(e.to_string()))?;
+            let name = name.trim().trim_end_matches('/').trim().to_string();
 
             if name == "debian-binary" {
                 // Version file, skip for now
                 continue;
             } else if name.starts_with("control.tar") {
                 self.extract_tar(&mut entry, &name, &self.control_dir.clone())?;
+                found_control = true;
             } else if name.starts_with("data.tar") {
                 self.extract_tar(&mut entry, &name, &self.data_dir.clone())?;
+                found_data = true;
             }
+        }
+
+        if !found_control {
+            return Err(RexebError::InvalidControl(
+                "archive has no control.tar.* member (not a valid .deb?)".into(),
+            ));
+        }
+        if !found_data {
+            return Err(RexebError::Extraction(
+                "archive has no data.tar.* member (not a valid .deb?)".into(),
+            ));
         }
 
         Ok(())
@@ -356,7 +374,10 @@ impl DebParser {
     fn collect_files(&self, metadata: &mut PackageMetadata) -> Result<()> {
         for entry in walkdir::WalkDir::new(&self.data_dir) {
             let entry = entry?;
-            if entry.file_type().is_file() {
+            let file_type = entry.file_type();
+            // Track symlinks too: they ship in the package and matter for
+            // conflict and security analysis (walkdir's file_type does not follow links)
+            if file_type.is_file() || file_type.is_symlink() {
                 // Get path relative to data_dir
                 if let Ok(rel_path) = entry.path().strip_prefix(&self.data_dir) {
                     metadata.files.push(PathBuf::from("/").join(rel_path));
@@ -383,6 +404,13 @@ impl Parser for DebParser {
 
     fn format(&self) -> PackageFormat {
         PackageFormat::Deb
+    }
+
+    fn persist(self: Box<Self>) -> PathBuf {
+        let path = self.temp_dir.path().to_path_buf();
+        // Prevent TempDir's Drop from deleting the directory
+        std::mem::forget(self.temp_dir);
+        path
     }
 }
 

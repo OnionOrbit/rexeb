@@ -110,12 +110,9 @@ pub async fn run_tui(
 async fn run_app<B: Backend>(
     terminal: &mut Terminal<B>,
     app: &mut App,
-    tick_rate: Duration,
+    _tick_rate: Duration,
     rx: &mut mpsc::Receiver<ProgressEvent>,
 ) -> io::Result<()> {
-    let tick_interval = tokio::time::interval(tick_rate);
-    tokio::pin!(tick_interval);
-
     loop {
         terminal.draw(|f| ui(f, app))?;
 
