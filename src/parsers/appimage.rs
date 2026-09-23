@@ -585,7 +585,30 @@ fn resolve_link(path: &Path) -> PathBuf {
 /// digit; the name is everything before it. Without a version component a
 /// trailing architecture token is dropped instead.
 pub fn split_appimage_filename(stem: &str) -> (String, Option<String>) {
-    let parts: Vec<&str> = stem
+    // Strip trailing `-<arch>` / `_<arch>` suffixes first: splitting on `_`
+    // would otherwise tear `x86_64` apart and misread `64` as a version.
+    let mut base = stem;
+    loop {
+        let lower = base.to_lowercase();
+        let mut stripped = None;
+        for arch in ARCH_TOKENS {
+            for sep in ['-', '_'] {
+                let suffix = format!("{sep}{arch}");
+                if lower.ends_with(&suffix) && lower.len() > suffix.len() {
+                    stripped = Some(&base[..base.len() - suffix.len()]);
+                    break;
+                }
+            }
+            if stripped.is_some() {
+                break;
+            }
+        }
+        match stripped {
+            Some(rest) => base = rest,
+            None => break,
+        }
+    }
+    let parts: Vec<&str> = base
         .split(['-', '_'])
         .filter(|p| !p.is_empty())
         .collect();
@@ -620,13 +643,15 @@ pub fn split_appimage_filename(stem: &str) -> (String, Option<String>) {
     }
 }
 
+/// Architecture tokens recognized in AppImage filenames
+const ARCH_TOKENS: &[&str] = &[
+    "x86_64", "x64", "amd64", "aarch64", "arm64", "i386", "i686", "armhf", "armv7l", "riscv64",
+    "ppc64le", "s390x", "linux",
+];
+
 /// Whether a filename component is an architecture token
 fn is_arch_token(part: &str) -> bool {
-    matches!(
-        part.to_lowercase().as_str(),
-        "x86_64" | "x64" | "amd64" | "aarch64" | "arm64" | "i386" | "i686" | "armhf"
-            | "armv7l" | "riscv64" | "ppc64le" | "s390x" | "linux"
-    )
+    ARCH_TOKENS.contains(&part.to_lowercase().as_str())
 }
 
 /// Sanitize a display name into a valid Arch package name
